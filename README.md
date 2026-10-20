@@ -70,3 +70,5 @@ It uses model ID `qwen3.8-27b`, port 8188, text-only input, a performance power-
 Model: [neroued/Qwen3.8-27B-NInfer](https://huggingface.co/neroued/Qwen3.8-27B-NInfer), revision `1cbd84e7221e51186bd7f093a149912d2489625b`, supplied SHA-256 `81f924d440c27261d820c19a9f8d45794c5aee410f8a68bd358133fa8c0375da`.
 
 The reported benchmark numbers belong to the owner's prior run and are not claimed as a new plugin benchmark. No model inference or calibration was rerun while importing this profile. Reinstalling the plugin retains edited profiles; the seed is created only when no profile store exists.
+
+When Start or a chat finds an existing server on the saved port, it automatically reuses it only if `/v1/models` advertises the exact saved model ID. The plugin never takes ownership of that process: Stop detaches, and saved launch changes require restarting the external server yourself. A different model, an invalid response, or an authenticated server without matching credentials is rejected. Strata tuning requires a plugin-owned server and never reuses an external process.
