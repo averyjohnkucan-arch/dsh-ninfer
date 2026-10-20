@@ -72,3 +72,16 @@ Model: [neroued/Qwen3.8-27B-NInfer](https://huggingface.co/neroued/Qwen3.8-27B-N
 The reported benchmark numbers belong to the owner's prior run and are not claimed as a new plugin benchmark. No model inference or calibration was rerun while importing this profile. Reinstalling the plugin retains edited profiles; the seed is created only when no profile store exists.
 
 When Start or a chat finds an existing server on the saved port, it automatically reuses it only if `/v1/models` advertises the exact saved model ID. The plugin never takes ownership of that process: Stop detaches, and saved launch changes require restarting the external server yourself. A different model, an invalid response, or an authenticated server without matching credentials is rejected. Strata tuning requires a plugin-owned server and never reuses an external process.
+
+## Per-model reasoning settings
+
+Edit a model profile to add/remove reasoning levels, give each a display name,
+and set the exact `reasoning_effort` backend value. Choose a default level, or
+Engine default to leave the request unspecified. Custom names and values are
+supported; availability is declared per profile, not assumed for every model.
+The engine/template must accept the configured backend values.
+
+Qwen3.8 profiles start with Low → `low`, Medium → `medium`, and XHigh → `xhigh`,
+with Medium as default. The conversation model picker uses these profile-owned
+settings through DSH's existing adapter reasoning metadata. No DSH core patch
+is required. An empty level list hides the reasoning selector for that profile.
