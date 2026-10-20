@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { LocalAdapter } from '../lib/adapter.js';
 import { freshProfile,validateProfile } from '../lib/profiles.js';
-import { profileReasoning,qwen38Reasoning } from '../lib/reasoning.js';
+import { profileReasoning,qwen38Reasoning,migrateOffReasoning } from '../lib/reasoning.js';
 
-test('Qwen3.8 profiles default to low, medium, xhigh with medium selected',()=>{
+test('Qwen3.8 profiles default to off, low, medium, xhigh with medium selected',()=>{
  const p=freshProfile('ninfer');p.name='Qwen3.8 Flash Next · Gyro Large';
  assert.deepEqual(validateProfile(p).reasoning,qwen38Reasoning());
  p.name='Other model';assert.deepEqual(profileReasoning(p).efforts,[]);
@@ -31,12 +31,12 @@ for(const engine of ['ninfer','strata'])test(`${engine}: advertises custom names
  const runtime={engine,profiles:[p],acquire:async()=>({state:{active:0},release:()=>{}}),cache:{gate:{acquire:async()=>()=>{}}},onChange:()=>{}};
  const adapter=new LocalAdapter({get:()=>undefined},runtime,engine);
  const info=await adapter.resolveModel(engine,p.id);
- assert.deepEqual(info.reasoning,{efforts:[{id:'low',name:'Low'},{id:'medium',name:'Medium'},{id:'xhigh',name:'XHigh'}],defaultEffort:'medium'});
+ assert.deepEqual(info.reasoning,{efforts:[{id:'off',name:'Off'},{id:'low',name:'Low'},{id:'medium',name:'Medium'},{id:'xhigh',name:'XHigh'}],defaultEffort:'medium'});
  const prepared=await adapter.prepareCall(engine,p.id);
- for(const level of [undefined,'low','medium','xhigh']){
+ for(const level of [undefined,'off','low','medium','xhigh']){
   const options=Object.freeze({provider:engine,model:p.id,messages:[{role:'user',content:[{type:'text',text:'Hello'}]}],maxTokens:4,...(level?{reasoningEffort:level}:{})});
   for await(const chunk of prepared.stream(options))assert.notEqual(chunk.kind,'error',JSON.stringify(chunk));
-  assert.equal(bodies.at(-1).reasoning_effort,level??'medium');
+  if(level==='off'){assert.equal(bodies.at(-1).chat_template_kwargs.enable_thinking,false);assert.equal(bodies.at(-1).reasoning_effort,undefined);}else assert.equal(bodies.at(-1).reasoning_effort,level??'medium');
  }
  p.reasoning={efforts:[{id:'quick',name:'Fast answer',value:'low'},{id:'slow',name:'Deep analysis',value:'xhigh'}],defaultEffort:'quick'};
  const custom=await adapter.prepareCall(engine,p.id);
@@ -44,4 +44,9 @@ for(const engine of ['ninfer','strata'])test(`${engine}: advertises custom names
  for await(const chunk of custom.stream({provider:engine,model:p.id,messages:[{role:'user',content:[{type:'text',text:'Hello'}]}],reasoningEffort:'slow'}))assert.notEqual(chunk.kind,'error',JSON.stringify(chunk));
  assert.equal(bodies.at(-1).reasoning_effort,'xhigh');
  await assert.rejects(async()=>{for await(const chunk of custom.stream({provider:engine,model:p.id,messages:[],reasoningEffort:'missing'})){}},/Unsupported reasoning effort/);
+});
+
+test('adding Off to existing profiles preserves custom names and default',()=>{
+ const profile={reasoning:{efforts:[{id:'quick',name:'Fast answer',value:'low'}],defaultEffort:'quick'}};
+ const next=migrateOffReasoning(profile);assert.equal(next.reasoning.defaultEffort,'quick');assert.deepEqual(next.reasoning.efforts.map(r=>r.name),['Off','Fast answer']);assert.equal(profile.reasoning.efforts.length,1);assert.deepEqual(migrateOffReasoning(next),next);
 });

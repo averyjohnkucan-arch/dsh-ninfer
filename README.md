@@ -93,3 +93,5 @@ Optionally install `dsh-model-scheduler` for shared GPU admission, queued chat s
 ## DFlash2 cache limitation
 
 The tuned DFlash2 profile stays unchanged. NInfer explicitly rejects disk session persistence with DFlash/DFlash2; this plugin therefore adds no unsupported checkpoint flags or alternate MTP profile. Its native in-memory reuse remains available while the server runs. Unloading or restarting the engine requires rebuilding its cache.
+
+The **Off** reasoning level disables thinking with `chat_template_kwargs.enable_thinking=false`; it does not send the literal `off` as an unsupported reasoning-effort value. Existing version-1 model profiles gain Off once on upgrade; custom names and Medium defaults are preserved. Set a custom row's backend value to `off` for the same behavior.
