@@ -85,3 +85,11 @@ Qwen3.8 profiles start with Low → `low`, Medium → `medium`, and XHigh → `x
 with Medium as default. The conversation model picker uses these profile-owned
 settings through DSH's existing adapter reasoning metadata. No DSH core patch
 is required. An empty level list hides the reasoning selector for that profile.
+
+## Model Scheduler integration
+
+Optionally install `dsh-model-scheduler` for shared GPU admission, queued chat switching, manual load/unload and a configurable 30-second idle timeout. This provider remains independently usable. Scheduling policy lives in that separate Cordis service; no Harness core changes are required. Owned engine process groups are stopped before GPU release is reported. External servers are detached, never killed.
+
+## DFlash2 cache limitation
+
+The tuned DFlash2 profile stays unchanged. NInfer explicitly rejects disk session persistence with DFlash/DFlash2; this plugin therefore adds no unsupported checkpoint flags or alternate MTP profile. Its native in-memory reuse remains available while the server runs. Unloading or restarting the engine requires rebuilding its cache.

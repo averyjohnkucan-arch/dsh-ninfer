@@ -28,7 +28,7 @@ for(const engine of ['ninfer','strata'])test(`${engine}: advertises custom names
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
  const p=freshProfile(engine);p.id='fixture';p.port=server.address().port;p.reasoning=qwen38Reasoning();
- const runtime={engine,profiles:[p],start:async()=>({active:0})};
+ const runtime={engine,profiles:[p],acquire:async()=>({state:{active:0},release:()=>{}}),cache:{gate:{acquire:async()=>()=>{}}},onChange:()=>{}};
  const adapter=new LocalAdapter({get:()=>undefined},runtime,engine);
  const info=await adapter.resolveModel(engine,p.id);
  assert.deepEqual(info.reasoning,{efforts:[{id:'low',name:'Low'},{id:'medium',name:'Medium'},{id:'xhigh',name:'XHigh'}],defaultEffort:'medium'});

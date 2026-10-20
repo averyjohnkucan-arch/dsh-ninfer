@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {checkMemory} from '../lib/gpu-guard.js';import {Runtime} from '../lib/runtime.js';
+test('memory admission rejects unsafe loads before any process is launched',()=>{assert.throws(()=>checkMemory({freeMiB:20000},23530),/No model was launched/);assert.doesNotThrow(()=>checkMemory({freeMiB:24061},23530));});
+test('same-profile concurrent startup coalesces; configuration conflicts fail',async()=>{const runtime=new Runtime('ninfer',{});let calls=0,release;const ready=new Promise(resolve=>release=resolve);runtime.startManaged=async()=>{calls++;await ready;return{ready:true};};const profile={id:'same',gpu:0,name:'Same'};const first=runtime.start('same',{profile}),second=runtime.start('same',{profile});await assert.rejects(()=>runtime.start('same',{profile:{...profile,name:'Other'}}),/another configuration/);assert.equal(calls,1);release();assert.equal(await first,await second);});
