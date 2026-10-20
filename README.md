@@ -81,14 +81,14 @@ Engine default to leave the request unspecified. Custom names and values are
 supported; availability is declared per profile, not assumed for every model.
 The engine/template must accept the configured backend values.
 
-Qwen3.8 profiles start with Low → `low`, Medium → `medium`, and XHigh → `xhigh`,
+Qwen3.8 profiles start with Off (thinking disabled), Low → `low`, Medium → `medium`, and XHigh → `xhigh`,
 with Medium as default. The conversation model picker uses these profile-owned
 settings through DSH's existing adapter reasoning metadata. No DSH core patch
 is required. An empty level list hides the reasoning selector for that profile.
 
 ## Model Scheduler integration
 
-Optionally install `dsh-model-scheduler` for shared GPU admission, queued chat switching, manual load/unload and a configurable 30-second idle timeout. This provider remains independently usable. Scheduling policy lives in that separate Cordis service; no Harness core changes are required. Owned engine process groups are stopped before GPU release is reported. External servers are detached, never killed.
+Optionally install `dsh-model-scheduler` for shared GPU admission, queued chat switching, manual load/unload and separate configurable idle retention (five minutes by default) and switch grace (30 seconds by default). This provider remains independently usable. Scheduling policy lives in that separate Cordis service; no Harness core changes are required. Owned engine process groups are stopped before GPU release is reported. External servers are detached, never killed.
 
 ## DFlash2 cache limitation
 
