@@ -1,0 +1,7 @@
+{
+  "id": "ninfer",
+  "title": "NInfer",
+  "source": "https://github.com/iamwavecut/ninfer-all",
+  "revision": "5ed86dff9fe3a5a0776f40a7aea86cf381da990d",
+  "catalogGeneratedFrom": "ninfer-test/bin/ninfer-serve --help"
+}

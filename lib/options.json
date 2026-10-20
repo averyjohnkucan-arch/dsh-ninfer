@@ -1,0 +1,1252 @@
+[
+  {
+    "flag": "--max-context",
+    "kind": "number",
+    "metavar": "N",
+    "help": "logical context ceiling of each request (default 8192)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--max-concurrency",
+    "kind": "number",
+    "metavar": "N",
+    "help": "requests decoded together, 1..8 (default 1)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--prefill-chunk",
+    "kind": "number",
+    "metavar": "N",
+    "help": "prefill chunk in tokens, a multiple of 128 (default 1024; 4096 for native MoE experts in host memory or files)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--decode-rounds-per-prefill",
+    "kind": "text",
+    "metavar": "N decode rounds after each prefill chunk while",
+    "help": " others generate (0: chunk / 64; 1 alternates)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--default-max-tokens",
+    "kind": "number",
+    "metavar": "N",
+    "help": "output limit of a request that sets none (default: the largest budget that still lets every lane be admitted at once, the remaining context with one lane)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--model-id",
+    "kind": "text",
+    "metavar": "ID",
+    "help": "public model name instead of the artifact's metadata.name",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--chat-template",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "replace the artifact's chat template at startup",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--device",
+    "kind": "number",
+    "metavar": "N",
+    "help": "CUDA device index (default 0)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--devices",
+    "kind": "text",
+    "metavar": "A,B,...",
+    "help": "one pipeline stage per listed device, 2..8; excludes --device",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--stage-layers",
+    "kind": "text",
+    "metavar": "A,B,...",
+    "help": "layers per stage in --devices order (default: split by free memory)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--expert-residency",
+    "kind": "text",
+    "metavar": "device|host|disk",
+    "help": "MoE experts on GPU (default), in pinned host memory, or in artifact files",
+    "group": "Model & Context",
+    "choices": [
+      "device",
+      "host",
+      "disk"
+    ]
+  },
+  {
+    "flag": "--expert-cache-mib",
+    "kind": "text",
+    "metavar": "N|auto",
+    "help": "persistent GPU cache (default auto); native Qwen and Gemma allow 0 (layer banks only). Flash-Next disk requires a nonzero cache",
+    "group": "Model & Context",
+    "choices": [
+      "N",
+      "auto"
+    ]
+  },
+  {
+    "flag": "--expert-dma-share",
+    "kind": "text",
+    "metavar": "F|auto",
+    "help": "host or disk experts: GPU share of cache misses, 0..1 (default 1); below 1 lets the CPU compute the rest (GGUF experts: the GPU's results bit for bit); auto: each call splits them by measured CPU and bus times (GGUF); calls of more than 8 tokens always use the GPU",
+    "group": "Model & Context",
+    "choices": [
+      "F",
+      "auto"
+    ]
+  },
+  {
+    "flag": "--expert-misses",
+    "kind": "text",
+    "metavar": "staged|mapped GGUF experts: copy misses into device staging while the",
+    "help": " cached experts run (default), or read host experts across the bus inside the expert kernels",
+    "group": "Model & Context",
+    "choices": [
+      "staged",
+      "mapped GGUF experts: copy misses into device staging while the"
+    ]
+  },
+  {
+    "flag": "--expert-tail-skip",
+    "kind": "number",
+    "metavar": "N",
+    "help": "GGUF host experts: leave out of a decode or verification call each uncached expert that all its tokens rank past place N (1..9) of their top ten; changes results",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--expert-prefill-buffers",
+    "kind": "text",
+    "metavar": "1|2",
+    "help": "GGUF host experts: device buffers for a long prompt's uncached experts (default 1); 2 copies the next layer's while this one runs, with memory from the expert cache",
+    "group": "Model & Context",
+    "choices": [
+      "1",
+      "2"
+    ]
+  },
+  {
+    "flag": "--expert-cpu-threads",
+    "kind": "number",
+    "metavar": "N",
+    "help": "CPU workers, 1..256 (default automatic)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--expert-cache-adaptive",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "replace cold cached experts between calls; changes the CPU/GPU arithmetic partition",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--expert-profile",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "fill the host expert cache from recorded counts",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--expert-profile-out",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "record expert counts for this artifact after requests",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--ngram-table",
+    "kind": "text",
+    "metavar": "PATH",
+    "help": "Qwen3.8-Flash-Next: the n-gram table artifact, for a model published without its table",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--ngram-residency",
+    "kind": "text",
+    "metavar": "disk|ram|ram-hot",
+    "help": " where the table's rows come from: its file, 16 rows per token (default); all of it in RAM; or the rows a hot-row profile ranks first in RAM and the rest from the file",
+    "group": "Model & Context",
+    "choices": [
+      "disk",
+      "ram",
+      "ram-hot"
+    ]
+  },
+  {
+    "flag": "--ngram-io",
+    "kind": "text",
+    "metavar": "buffered|direct|mmap",
+    "help": "how rows are read from the file: through the page cache (default), past it, or mapped",
+    "group": "Model & Context",
+    "choices": [
+      "buffered",
+      "direct",
+      "mmap"
+    ]
+  },
+  {
+    "flag": "--ngram-io-depth",
+    "kind": "number",
+    "metavar": "N",
+    "help": "row reads in flight, 1..1024 (default 64)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--ngram-hot-profile",
+    "kind": "text",
+    "metavar": "PATH",
+    "help": "ram-hot: override the table's embedded profile with a ninfer-ngram-profile file",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--ngram-ram-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "disk, ram-hot: RAM for rows and their index (disk default 0/off; ram-hot default 4096)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--ngram-lock",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "ram, ram-hot: lock the rows in physical memory",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--no-ngram-table",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "Qwen3.8-Flash-Next: run without the n-gram table. Non-standard experimental mode: the model was trained with the table and degrades badly without it (WikiText-2 perplexity 2.66 -> 5.01)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--no-cuda-graph",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "decode without CUDA Graphs (on by default)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--cuda-graph-allowance-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "CUDA Graph driver-state allowance taken from the KV sizing budget (default 0: computed per profile)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--gpu-clock-floor",
+    "kind": "text",
+    "metavar": "MHZ",
+    "help": "hold the GPUs' graphics clock at MHZ or more while requests run, so pipeline stages do not wait at idle clocks (needs administrator or root rights)",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--device-profile",
+    "kind": "text",
+    "metavar": "auto|off|calibrate",
+    "help": " per-GPU route profile: auto uses the stored or built-in one and calibrates a device that has none; off keeps the compiled routes; calibrate measures anew (default auto)",
+    "group": "Model & Context",
+    "choices": [
+      "auto",
+      "off",
+      "calibrate"
+    ]
+  },
+  {
+    "flag": "--device-profile-path",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "profile file instead of the user cache",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--context-cost-presets",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "runtime context-cost presets over the compiled-in values",
+    "group": "Model & Context"
+  },
+  {
+    "flag": "--fast-prefill-kernel",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "prefill an int8 or rk* KV cache with the fast prompt-attention kernel (FP16 PV per 64-key tile) and round --prefill-chunk down to whole attention waves; an nvfp4 cache past 2048 keys with its FP4 Tensor Core QK kernel (Blackwell)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--prefill-cublas",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "hand wide prefill GEMMs to cuBLAS: a large prefill speedup for a small perplexity cost; wants a larger --prefill-chunk",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--no-prefill-cublas-projections",
+    "kind": "boolean",
+    "metavar": "",
+    "help": " with --prefill-cublas, keep the attention and GDN input projections off that route",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--no-prefill-a8",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "prefill every projection on the A16 routes instead of the integer-activation ones",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--mlp-a8-decode",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "integer-activation MLP gate_up at decode and verify widths",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--lm-head-q4",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "store the output head as Q4 or Q6 while loading (Q4 costs +0.69% perplexity, Q6 +0.01%)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--embedding-q4",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "| --embedding-q6 store the token embedding as Q4 or Q6 while loading",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--mtp-experts-q4",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "Qwen3.6-35B-A3B: store the MTP layer's routed experts in the text layers' formats",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--gdn-state-fp16",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "keep the GDN recurrent state in FP16 (halves each host state image)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--rope-yarn",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "past the model's native window, apply Qwen's YaRN at factor max-context / native instead of unscaled RoPE",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--rope-yarn-factor",
+    "kind": "number",
+    "metavar": "F",
+    "help": "apply YaRN at this fixed factor, 1..4, to every position whatever --max-context is (default 1: as --rope-yarn decides)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--rope-scaling-factor",
+    "kind": "number",
+    "metavar": "F",
+    "help": "instead of YaRN, interpolate positions past --rope-scaling-original-context linearly by F, 1..32 (default 1: off)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--rope-scaling-original-context",
+    "kind": "number",
+    "metavar": "N",
+    "help": " the interpolation threshold (default: the model's native window)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--wddm-evictable-budget",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "Windows builds: budget against dedicated memory, committing arenas at startup",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--models-dir",
+    "kind": "text",
+    "metavar": "DIR",
+    "help": "serve every .ninfer in DIR (and each subdirectory holding one) by its file or directory name",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--models-preset",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "INI presets: [id] sections with model = PATH and options without dashes; [*] applies to all",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--models-max",
+    "kind": "number",
+    "metavar": "N",
+    "help": "models loaded at once (default 1, 0 = no limit); the least recently used idle one sleeps (with --model-suspend) or unloads to make room",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--no-models-autoload",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "a request for a model that is not loaded fails instead of loading it (?autoload=1 overrides)",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--sleep-idle-seconds",
+    "kind": "number",
+    "metavar": "N",
+    "help": "put a model idle for N s to sleep (needs --model-suspend); also without a router",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--unload-idle-seconds",
+    "kind": "number",
+    "metavar": "N",
+    "help": "unload a model idle for N s",
+    "group": "Precision & Kernels"
+  },
+  {
+    "flag": "--model-suspend",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "enable POST /v1/models/{id}/suspend and /resume (and /models/unload, /models/load): device memory at fixed addresses, released while suspended; needs CUDA virtual memory management",
+    "group": "Model Suspend"
+  },
+  {
+    "flag": "--suspend-snapshot",
+    "kind": "number",
+    "metavar": "M",
+    "help": "where suspended state waits: pageable (default; host memory only while suspended) or pinned (reserved at startup, faster transfers)",
+    "group": "Model Suspend"
+  },
+  {
+    "flag": "--suspend-weights",
+    "kind": "text",
+    "metavar": "S",
+    "help": "resume reads the weights from: artifact (default) or host (a host copy taken at suspend: weight-sized host memory, resume at bus speed)",
+    "group": "Model Suspend"
+  },
+  {
+    "flag": "--no-auto-resume",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "a request while suspended fails (503) instead of resuming the model (also per suspend request)",
+    "group": "Model Suspend"
+  },
+  {
+    "flag": "--kv-capacity",
+    "kind": "text",
+    "metavar": "N|auto",
+    "help": "shared KV capacity in tokens (default auto with the hybrid prefix cache, --max-context with the checkpoint catalog); auto sizes the pool from free memory",
+    "group": "Kv Cache",
+    "choices": [
+      "N",
+      "auto"
+    ]
+  },
+  {
+    "flag": "--kv-headroom-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "memory --kv-capacity auto leaves free (default 1024); alias --vram-headroom-mib",
+    "group": "Kv Cache"
+  },
+  {
+    "flag": "--kv-dtype",
+    "kind": "text",
+    "metavar": "T",
+    "help": "KV storage: bf16 (default), int8, fp8, rk8v4, rk4v4, rk4v4-e8, rk2v4-e8, nvfp4 or k8v4",
+    "group": "Kv Cache"
+  },
+  {
+    "flag": "--graft",
+    "kind": "text",
+    "metavar": "and each checkpoint catalog option below (state slots, host KV,",
+    "help": "",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--no-prefix-reuse",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "disable compatible-prefix caching (on by default); excludes the options below",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--device-state-slots",
+    "kind": "number",
+    "metavar": "N",
+    "help": "checkpoint states on the device beyond the active lanes (default max-concurrency)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--host-state-slots",
+    "kind": "number",
+    "metavar": "N",
+    "help": "pinned host checkpoint states (default 8)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--host-kv-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "pinned host KV in MiB (default 8192)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--host-cache-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "one pinned host RAM ceiling instead of the two above: host states for every checkpoint the capture path creates (at most half), more automatic anchors with the headroom, host KV the rest; with the hybrid prefix cache the pool KV blocks and state snapshots share (default 8192, 0 keeps the cache on the device); auto: the host memory free once the model is loaded, less --host-cache-reserve-mib (default 3072), at most --host-cache-max-mib and --host-cache-percent of the machine's memory",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--host-cache-reserve-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "with --host-cache-mib auto: host memory left free for what grows after startup (default 3072)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--host-cache-max-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "with --host-cache-mib auto: the largest budget",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--host-cache-percent",
+    "kind": "number",
+    "metavar": "N",
+    "help": "with --host-cache-mib auto: the largest budget as a percentage of the machine's memory",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--max-private-continuations",
+    "kind": "text",
+    "metavar": "N private continuation catalog (default 2x",
+    "help": " max-concurrency)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--max-shared-prefixes",
+    "kind": "number",
+    "metavar": "N",
+    "help": "shared stable-prefix catalog (default max(max-concurrency,7))",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--max-long-anchors-per-continuation",
+    "kind": "number",
+    "metavar": "N",
+    "help": " long anchors kept per continuation (default 2, 4 with --auto-long-anchors)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--auto-long-anchors",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "anchor up to that many message boundaries of every request, so a request that rewrites earlier history resumes from the nearest anchor instead of root (off)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--branch-anchors",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "anchor a request where its prompt stops matching a retained conversation, when no checkpoint lies near that depth, so the next request diverging there resumes from it (off)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--no-endpoint-anchors",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "do not keep the endpoint a request resumes and extends as a long anchor; a later request that diverges there (another reply, an edited last message) then re-prefills the conversation (kept)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--long-anchor-spacing",
+    "kind": "number",
+    "metavar": "N",
+    "help": "with --auto-long-anchors, minimum tokens between anchors, doubling per anchor back from the prompt end (default 1024; 0 anchors every boundary)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--progress-anchor-tokens",
+    "kind": "number",
+    "metavar": "N",
+    "help": "anchor every prompt at each multiple of N tokens, so a client that cancels a long prefill and retries resumes from the deepest anchor instead of token zero (default 16384; 0 disables; otherwise at least 256)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--max-cache-markers-per-request",
+    "kind": "number",
+    "metavar": "N",
+    "help": " client cache markers one request may carry (default 4)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--auto-prefix-grid",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "offer shared candidates on a token grid, so callers whose prompts start alike share a prefix without a client hint; a grid frontier is published once two callers ask for it",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--derive-session-keys",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "give a request without a session key one derived from its instructions and first user message, so the conversation keeps a session lineage and live-session retention (default off)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--context-cache-policy",
+    "kind": "text",
+    "metavar": "default|rolling",
+    "help": " rolling: a capture that extends a resident checkpoint inherits its demand, for one conversation whose prompt only grows",
+    "group": "Context Cache",
+    "choices": [
+      "default",
+      "rolling"
+    ]
+  },
+  {
+    "flag": "--release-diverged-checkpoints",
+    "kind": "boolean",
+    "metavar": "",
+    "help": " a conversation's private checkpoint that its next prompt diverges from keeps no value and goes first",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--thorough-admission-search",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "search up to 250 ms for a new request's reuse plan even while others decode (otherwise 10 ms), longer for a costly request, exploring every eligible option",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--recency-eviction",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "under pressure give up the least recently used owners first, only as many as needed, and demote kept ones to Host",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--value-aware-demote",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "under pressure prefer evicting the conversations cheapest to rebuild and demoting the costliest",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--kv-lease-growth",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "reserve a 4096-token output window and extend it instead of the whole max_tokens budget; an answer the pool cannot extend ends with length",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--concurrent-prefill",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "admit waiting requests to free lanes while other requests prefill",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--disk-kv-path",
+    "kind": "text",
+    "metavar": "DIR",
+    "help": "disk tier: evicted continuations write their KV and states there, per artifact and profile, and survive restarts",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--disk-kv-gib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "disk tier budget (default 64)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--disk-kv-restore",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "seed a new request's matching prefix from the disk tier",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--disk-kv-directstorage",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "read restores through DirectStorage (Windows builds with NINFER_DIRECTSTORAGE)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--slot-save-path",
+    "kind": "text",
+    "metavar": "DIR",
+    "help": "enable POST /slots/{id}?action=save|restore|erase, which writes a retained session to a file in DIR or restores one from it",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--auto-save-evicted",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "write a retained session back to the slot file it was last saved to or restored from before an involuntary eviction destroys it (needs --slot-save-path)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--use-alt-prefix-caching",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "the hybrid prefix cache, the default: content-addressed KV blocks and sparse state snapshots; free VRAM becomes block cache and --host-cache-mib sizes the Host tier; named, it rejects a catalog option instead of yielding",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--use-original-prefix-caching",
+    "kind": "text",
+    "metavar": "the checkpoint catalog instead of the hybrid",
+    "help": " prefix cache",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--device-snapshot-slots",
+    "kind": "number",
+    "metavar": "N",
+    "help": "hybrid: device state snapshot slots (default concurrency + 1; + 2 without a Host tier)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--cache-taps-per-request",
+    "kind": "number",
+    "metavar": "N",
+    "help": "hybrid: new prefill snapshots per request (default 8; 2 without a Host tier)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--cache-tap-ladder",
+    "kind": "number",
+    "metavar": "N",
+    "help": "hybrid: ladder base in tokens for history snapshots (default max(4096, 2x prefill chunk))",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--cache-tap-min-gap",
+    "kind": "number",
+    "metavar": "N",
+    "help": "hybrid: minimum tokens between ladder snapshots (default max(1024, prefill chunk))",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--prefix-cache-file",
+    "kind": "text",
+    "metavar": "PATH",
+    "help": "hybrid: restore the Host tier from PATH at startup when this binary wrote it for the same artifact and KV format, and save it there when the server stops (Ctrl+C twice) (default off)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--spec",
+    "kind": "text",
+    "metavar": "mtp|dflash|dflash2",
+    "help": "speculative decoding backend",
+    "group": "Context Cache",
+    "choices": [
+      "mtp",
+      "dflash",
+      "dflash2"
+    ]
+  },
+  {
+    "flag": "--draft-tokens",
+    "kind": "number",
+    "metavar": "N",
+    "help": "drafts per round, 1..15",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--draft-min-p",
+    "kind": "number",
+    "metavar": "P",
+    "help": "Flash-Next MTP confidence floor, 0..1 (default 0)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--lm-head-draft",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "draft with the optimized proposal head, which the artifact must store (the default when it does)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--full-draft-head",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "draft with the full output head even when the artifact stores a proposal head",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--adaptive-mtp",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "each MTP round verifies 3..--draft-tokens drafts, the width the drafts' measured survival and round cost favor; greedy output is unchanged",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--mtp-attention-window",
+    "kind": "number",
+    "metavar": "N",
+    "help": "the MTP draft head attends to its first 64 keys and the newest N before its query, not the whole history; verification is unchanged (default 0: whole history)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--ngram-draft-tokens",
+    "kind": "number",
+    "metavar": "N",
+    "help": "copy up to N tokens (1..63) per round from earlier prompt, tool-result or output text, verified alongside --spec; on with 15 whenever --spec is set, 0 disables it, above 15 needs --max-concurrency 1",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--ngram-min-match",
+    "kind": "number",
+    "metavar": "N",
+    "help": "shortest match a copy is drawn from, 4..64 (default 12)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--ngram-archive-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "keep finished requests' copy sources in RAM for later requests naming the same X-NInfer-Draft-Session (default 0: off)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--ngram-session-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "per-session share of that archive (default 128)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--ngram-native-sessions",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "also recognize the session identities Kilo, Codex and Claude send",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--lookup-ngram",
+    "kind": "number",
+    "metavar": "N",
+    "help": "context-lookup drafting alongside --spec: the last N tokens are matched against the sequence so far and what followed is proposed (default 0: off)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--vision",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "accept images and video and load the Vision GPU allocations",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--vision-residency",
+    "kind": "text",
+    "metavar": "resident|overlay|cpu",
+    "help": " overlay keeps the Vision tower in host memory and borrows device memory per image (alias --vision-offload); cpu runs it on CPU threads with no device Vision memory, and caps --vision-max-merged at 256 unless given",
+    "group": "Context Cache",
+    "choices": [
+      "resident",
+      "overlay",
+      "cpu"
+    ]
+  },
+  {
+    "flag": "--vision-cpu",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "--vision with --vision-residency cpu",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--vision-max-merged",
+    "kind": "number",
+    "metavar": "N",
+    "help": "merged tokens of one media item, 64..16384 (default 16384); larger media is downscaled",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--media-cache-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "retained prepared media (default 1024; 0 disables)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--media-live-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "all live prepared media payloads (default 2048)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--media-preprocess-threads",
+    "kind": "number",
+    "metavar": "N",
+    "help": "media preprocessing workers (default 0: auto, at most 16)",
+    "group": "Context Cache"
+  },
+  {
+    "flag": "--temperature",
+    "kind": "number",
+    "metavar": "F",
+    "help": "0..2",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--top-p",
+    "kind": "number",
+    "metavar": "F",
+    "help": "0..1",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--top-k",
+    "kind": "number",
+    "metavar": "N",
+    "help": "0..20",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--min-p",
+    "kind": "number",
+    "metavar": "F",
+    "help": "0..1",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--presence-penalty",
+    "kind": "number",
+    "metavar": "F",
+    "help": "-2..2",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--frequency-penalty",
+    "kind": "number",
+    "metavar": "F",
+    "help": "-2..2",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--seed",
+    "kind": "number",
+    "metavar": "N",
+    "help": "seed of a request that sets none (default: fresh per request)",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--greedy",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "force temperature 0 (exact argmax)",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--post-thinking",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "sample a thinking request's answer with the post-thinking preset (temperature 0.2) from the token after its reasoning closes (default off; a request opts in with a post_thinking object)",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--post-thinking-temperature",
+    "kind": "text",
+    "metavar": "F 0..2; implies --post-thinking",
+    "help": "",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--post-thinking-top-p",
+    "kind": "number",
+    "metavar": "F",
+    "help": "0..1; implies --post-thinking",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--post-thinking-top-k",
+    "kind": "number",
+    "metavar": "N",
+    "help": "0..20; implies --post-thinking",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--post-thinking-sampler",
+    "kind": "text",
+    "metavar": "temp=F,top_p=F,top_k=N[,min_p=F,presence=F,frequency=F]",
+    "help": " the same fields in one flag",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--no-thinking",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "disable thinking by default",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--preserve-thinking",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "retain closed-turn assistant reasoning in later prompts",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--default-thinking-budget",
+    "kind": "number",
+    "metavar": "N",
+    "help": "cap model-origin thinking of thinking requests; control tokens count toward the output limit",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--thinking-budget-message",
+    "kind": "text",
+    "metavar": "TEXT",
+    "help": " notice a request gets at its thinking budget; the canonical </think> close is appended when missing",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--reasoning-loop",
+    "kind": "text",
+    "metavar": "off|stop|conclude",
+    "help": " every 512 thinking tokens, test whether the thinking repeats whole passages; stop ends the reply as length, conclude closes the thinking and lets the model answer (default off)",
+    "group": "Sampling & Thinking",
+    "choices": [
+      "off",
+      "stop",
+      "conclude"
+    ]
+  },
+  {
+    "flag": "--default-reasoning-effort",
+    "kind": "text",
+    "metavar": "E",
+    "help": "none, minimal, low, medium, high, xhigh or max for requests that set no effort and keep thinking on with a .json sidecar beside it); a request selecting it with \"graft\": \"NAME\" runs as if the graft's hidden turn preceded its own messages; repeatable",
+    "group": "Sampling & Thinking"
+  },
+  {
+    "flag": "--default-graft",
+    "kind": "text",
+    "metavar": "NAME",
+    "help": "apply a loaded graft to every request that names none; a request opts out with \"graft\": \"\"",
+    "group": "Prompt Grafts"
+  },
+  {
+    "flag": "--structured-output",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "enforce response formats (JSON, JSON Schema, regex, choice, GBNF) and strict tool arguments; reserves the grammar masks and adds a grammar stage to every DFlash round",
+    "group": "Api Behavior"
+  },
+  {
+    "flag": "--unconstrained-response-format",
+    "kind": "boolean",
+    "metavar": "",
+    "help": " without --structured-output, generate such a request unconstrained instead of refusing it",
+    "group": "Api Behavior"
+  },
+  {
+    "flag": "--assistant-prefill",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "continue a Chat Completions request's trailing assistant message in place, as /v1/messages does; needs thinking disabled",
+    "group": "Api Behavior"
+  },
+  {
+    "flag": "--lenient-assistant-history",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "accept Responses input whose assistant text or reasoning follows function_call Items; it joins that turn, rendered before its calls",
+    "group": "Api Behavior"
+  },
+  {
+    "flag": "--lenient-image-detail",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "read an OpenAI image detail other than auto, low or high as auto instead of refusing the request",
+    "group": "Api Behavior"
+  },
+  {
+    "flag": "--usage-chunk-choice",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "give the streamed usage chunk a zero-delta choice, for strict parsers that reject choices:[]",
+    "group": "Api Behavior"
+  },
+  {
+    "flag": "--host",
+    "kind": "text",
+    "metavar": "H",
+    "help": "listen address (default 127.0.0.1)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--port",
+    "kind": "number",
+    "metavar": "N",
+    "help": "listen port (default 8080)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--stats-port",
+    "kind": "number",
+    "metavar": "N",
+    "help": "also serve /health, /stats, /v1/load and /metrics on port N with a worker of their own (default off)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--api-key",
+    "kind": "text",
+    "metavar": "KEY",
+    "help": "require this bearer or x-api-key value (default: none)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--cors",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "send permissive CORS headers for browser clients",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--no-webui",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "do not serve a WebUI built in with NINFER_WEBUI_DIR on GET /",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--webui-mcp-proxy",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "relay the WebUI's MCP traffic at /cors-proxy; http targets only and reaches any host, so only on a trusted bind",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--max-request-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "request body limit, enforced before parsing (default 384)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--max-pending-requests",
+    "kind": "number",
+    "metavar": "N",
+    "help": "requests waiting for admission (default 16)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--pending-timeout-ms",
+    "kind": "number",
+    "metavar": "N",
+    "help": "preparation-plus-admission wait (default 600000)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--recover-invariant-failures",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "on a broken internal invariant, fail the active requests and keep serving the queue instead of failing the engine",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--response-store-max-records",
+    "kind": "number",
+    "metavar": "N",
+    "help": " retained Responses objects (default 1024)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--response-store-max-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "Responses state budget (default 256)",
+    "group": "Network & Limits"
+  },
+  {
+    "flag": "--request-log-jsonl",
+    "kind": "text",
+    "metavar": "FILE",
+    "help": "append full-precision server and request records",
+    "group": "Logging"
+  },
+  {
+    "flag": "--request-log-max-mib",
+    "kind": "number",
+    "metavar": "N",
+    "help": "rotate the request log at N MiB (default 0: one unbounded file)",
+    "group": "Logging"
+  },
+  {
+    "flag": "--request-log-keep",
+    "kind": "number",
+    "metavar": "N",
+    "help": "rotated request logs kept (default 4)",
+    "group": "Logging"
+  },
+  {
+    "flag": "--log-stats-interval-ms",
+    "kind": "number",
+    "metavar": "N",
+    "help": "throughput report interval (default 5000; 0 disables)",
+    "group": "Logging"
+  },
+  {
+    "flag": "--log-level",
+    "kind": "text",
+    "metavar": "L",
+    "help": "trace, debug, info (default), warning, error, critical or off",
+    "group": "Logging"
+  },
+  {
+    "flag": "--log-colours",
+    "kind": "text",
+    "metavar": "on|off",
+    "help": "colour the console log's levels and statistics (default: levels on a console, statistics off)",
+    "group": "Logging",
+    "choices": [
+      "on",
+      "off"
+    ]
+  },
+  {
+    "flag": "--log-stats-panel",
+    "kind": "text",
+    "metavar": "on|off",
+    "help": "pin session statistics beneath the console log on an interactive terminal (default off)",
+    "group": "Logging",
+    "choices": [
+      "on",
+      "off"
+    ]
+  },
+  {
+    "flag": "--lm-head-q6",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "--lm-head-q4 | --lm-head-q6   store the output head as Q4 or Q6 while loading",
+    "group": "Aliases"
+  },
+  {
+    "flag": "--embedding-q6",
+    "kind": "boolean",
+    "metavar": "",
+    "help": "--embedding-q4 | --embedding-q6",
+    "group": "Aliases"
+  }
+]
