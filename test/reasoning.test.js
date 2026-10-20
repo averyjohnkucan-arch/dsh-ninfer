@@ -38,6 +38,10 @@ for(const engine of ['ninfer','strata'])test(`${engine}: advertises custom names
   for await(const chunk of prepared.stream(options))assert.notEqual(chunk.kind,'error',JSON.stringify(chunk));
   if(level==='off'){assert.equal(bodies.at(-1).chat_template_kwargs.enable_thinking,false);assert.equal(bodies.at(-1).reasoning_effort,undefined);}else assert.equal(bodies.at(-1).reasoning_effort,level??'medium');
  }
+ p.reasoning=qwen38Reasoning();p.reasoning.defaultEffort='off';
+ const disabled=await adapter.prepareCall(engine,p.id);
+ for await(const chunk of disabled.stream({provider:engine,model:p.id,messages:[{role:'user',content:[{type:'text',text:'Hello'}]}]}))assert.notEqual(chunk.kind,'error',JSON.stringify(chunk));
+ assert.equal(bodies.at(-1).chat_template_kwargs.enable_thinking,false);
  p.reasoning={efforts:[{id:'quick',name:'Fast answer',value:'low'},{id:'slow',name:'Deep analysis',value:'xhigh'}],defaultEffort:'quick'};
  const custom=await adapter.prepareCall(engine,p.id);
  assert.equal(custom.model.reasoning.efforts[1].name,'Deep analysis');
