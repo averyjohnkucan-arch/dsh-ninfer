@@ -92,6 +92,12 @@ Optionally install `dsh-model-scheduler` for shared GPU admission, queued chat s
 
 ## DFlash2 cache limitation
 
+The per-profile **Keep model loaded while idle** setting (`keepWarm: true`) preserves the running engine and its in-memory cache when the optional Model Scheduler is installed. Another queued model, image job, manual Unload or shutdown can still release it. Other profiles retain their normal idle timer.
+
+For the qualified Qwen3.8 profile, `cacheStableHistory: true` enables positional system and tool updates through the public provider adapter. It requires `--chat-template` to point to this plugin's `assets/qwen3_8-cache.jinja` and `--preserve-thinking: true`. The external template derives from the pinned upstream Qwen3.8 template; stock NInfer remains unchanged. Tool declarations stay at their history positions while the full catalog remains available to the server for tool validation.
+
+This processes new user text after Send. It does not process drafts or generate background answers. Changing the template requires a one-time cache rebuild. Cold loads, history edits, compaction, reasoning changes and non-additive tool changes can still require recomputation. Do not enable this template on unrelated model families without validation.
+
 The tuned DFlash2 profile stays unchanged. NInfer explicitly rejects disk session persistence with DFlash/DFlash2; this plugin therefore adds no unsupported checkpoint flags or alternate MTP profile. Its native in-memory reuse remains available while the server runs. Unloading or restarting the engine requires rebuilding its cache.
 
 The **Off** reasoning level disables thinking with `chat_template_kwargs.enable_thinking=false`; it does not send the literal `off` as an unsupported reasoning-effort value. Existing version-1 model profiles gain Off once on upgrade; custom names and Medium defaults are preserved. Set a custom row's backend value to `off` for the same behavior.
