@@ -10,14 +10,14 @@ export async function apply(ctx, config) {
  const id='ninfer', title='NInfer';
  const token=randomBytes(32).toString('hex');
  let registration;
- const runtime=new Runtime(id,config,()=>registration?.replace([id]));
+ const runtime=new Runtime(id,config,()=>{try{registration?.replace([id]);}catch(error){if(error.code==='REGISTRATION_DISPOSED')registration=undefined;else throw error;}});
  await runtime.init();
  // Optional scheduler service. Each engine remains usable on its own.
  ctx.inject(['modelScheduler'],scope=>{
   const scheduler=scope.get('modelScheduler');
   scope.effect(()=>{runtime.scheduler=scheduler;const unregister=scheduler.registerProvider(id,()=>runtime.profiles.map(p=>runtime.driver(p)));return async()=>{unregister();try{await Promise.all(runtime.profiles.map(p=>scheduler.unload(id+':'+p.id,{force:true})));}finally{if(runtime.scheduler===scheduler)runtime.scheduler=null;}};});
  });
- ctx.effect(()=>{registration=ctx.llm.registerAdapter([id],new LocalAdapter(ctx,runtime,title));return registration;});
+ ctx.effect(()=>{const owned=ctx.llm.registerAdapter([id],new LocalAdapter(ctx,runtime,title));registration=owned;return()=>{if(registration===owned)registration=undefined;owned();};});
  ctx.on('webserver/index-inject',table=>table.push({kind:'global',name:'__DSH_NINFER__',value:{path:'/plugins/dsh-ninfer/action',token}}));
  ctx.effect(()=>ctx.webServer.register({kind:'exact',path:'/plugins/dsh-ninfer/action',handler:async(req,res)=>{
   res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','application/json');
