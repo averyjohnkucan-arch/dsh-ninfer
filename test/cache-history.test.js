@@ -57,8 +57,8 @@ async function fixture(t,enabled){
  const runtime={engine:'ninfer',profiles:[p],acquire:async()=>({state:{active:0},release:()=>{}})};
  const adapter=new LocalAdapter({get:()=>undefined},runtime,'NInfer');
  const prepared=await adapter.prepareCall('ninfer','fixture');
- const call=async messages=>{
-  for await(const chunk of prepared.stream({provider:'ninfer',model:'fixture',system:'Stable base policy',messages,maxTokens:8,tools:[{name:'initial',description:'Base tool',parameters:{type:'object'}},{name:'late',description:'Later discovered tool',parameters:{type:'object'},deferLoading:true}]})){
+ const call=async (messages,extra={})=>{
+  for await(const chunk of prepared.stream({...extra,provider:'ninfer',model:'fixture',system:'Stable base policy',messages,maxTokens:8,tools:[{name:'initial',description:'Base tool',parameters:{type:'object'}},{name:'late',description:'Later discovered tool',parameters:{type:'object'},deferLoading:true}]})){
    assert.notEqual(chunk.kind,'error',JSON.stringify(chunk));
   }
  };
@@ -86,4 +86,13 @@ test('the old capability declaration reproduces the prefix rewrite on the same s
  await call([user('Hello'),assistant('Hi'),{id:'system-update',role:'system',content:[text('New retrieved knowledge')]},user('Next')]);
  assert.notDeepEqual(bodies[0].messages[0],bodies[1].messages[0]);
  assert.ok(bodies[1].messages[0].content.includes('New retrieved knowledge'));
+});
+
+test('real pi-ai route forwards chat identity and shared-prefix metadata on every step',async t=>{
+ const {bodies,call}=await fixture(t,true);
+ await call([user('First question')],{sessionId:'chat-a'});
+ await call([user('Different question')],{sessionId:'chat-b'});
+ assert.deepEqual(bodies[0].messages[0],bodies[1].messages[0]);
+ assert.equal(bodies[0].messages[0].content[0].prompt_cache_breakpoint.mode,'explicit');
+ assert.notEqual(bodies[0].prompt_cache_key,bodies[1].prompt_cache_key);
 });

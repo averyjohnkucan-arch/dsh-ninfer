@@ -24,7 +24,6 @@ try{
   await execute(python,['-B','-c','import unleashed; unleashed.build()'],source);
   console.log('DSH_RESULT='+JSON.stringify({sourceDir:source,executable:join(source,'build',process.platform==='win32'?'strata.exe':'strata'),python}));
  }else{
-  await execute('python3',[join(pkg,'scripts/fetch-ninfer.py'),'--root',root]);
-  console.log('DSH_RESULT='+JSON.stringify({executable:join(root,'bin','ninfer-serve')}));
+  await execute(process.execPath,[join(pkg,'scripts/build-checkpoint-engine.js'),'--root',root]);
  }
 }catch(e){console.error(e.message);process.exitCode=1;}

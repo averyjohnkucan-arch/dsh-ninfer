@@ -1,0 +1,204 @@
+diff --git a/docs/serving.md b/docs/serving.md
+index aed023b..fc7dce3 100644
+--- a/docs/serving.md
++++ b/docs/serving.md
+@@ -717,8 +717,9 @@ reports them lowercase, so one file never has two names. `if_digest` makes save
+ still holding that session, checked atomically with the operation. Restore replaces whatever the
+ slot held and makes the restored session an ordinary cache entry that any request with a matching
+ prefix reuses, including from its checkpoints. A snapshot restores only on a server with the same
+-model artifact, weight formats, KV dtype, speculative backend, draft tokens and draft head; DFlash
+-servers do not support persistence. Files are written to a temporary name and renamed, and end
++model artifact, weight formats, KV dtype, speculative backend, draft tokens and draft head. DFlash and DFlash2 snapshots include their draft context
++frontier and cyclic draft state. Compatible shared-prefix images are retained as private
++anchors so a new chat can reuse its unchanged system/tool prefix after a restart. Files are written to a temporary name and renamed, and end
+ with a checksum that restore verifies before it allocates anything. Slots belong to the
+ checkpoint catalog: `--slot-save-path` selects it in place of the default hybrid prefix cache, and
+ the slot options are refused with `--use-alt-prefix-caching` and `--no-prefix-reuse`. They are
+diff --git a/src/models/qwen3_5/program/storage/session_snapshot.cpp b/src/models/qwen3_5/program/storage/session_snapshot.cpp
+index 035f96c..dcd8c06 100644
+--- a/src/models/qwen3_5/program/storage/session_snapshot.cpp
++++ b/src/models/qwen3_5/program/storage/session_snapshot.cpp
+@@ -41,8 +41,9 @@ namespace ninfer::models::qwen3_5::detail {
+ namespace {
+ 
+ constexpr char kSessionSnapshotMagic[8]         = {'N', 'I', 'N', 'F', 'S', 'E', 'S', '1'};
+-// Version 2 binds the RoPE scaling profile in the configuration block.
+-constexpr std::uint32_t kSessionSnapshotVersion = 2;
++// Version 3 also retains the DFlash/DFlash2 context frontier. Draft cyclic KV
++// is already part of each StateImage; DFlash full KV uses the backend page payload.
++constexpr std::uint32_t kSessionSnapshotVersion = 3;
+ constexpr std::size_t kMaximumModelBindingBytes = 4096;
+ constexpr std::uint32_t kMaximumSnapshotAnchors = 64;
+ 
+@@ -244,6 +245,7 @@ struct SnapshotSession {
+     std::uint32_t execution_frontier         = 0;
+     std::uint32_t text_kv_valid              = 0;
+     std::uint32_t mtp_kv_valid               = 0;
++    std::uint32_t dflash_context_frontier    = 0;
+     std::int32_t rope_delta                  = 0;
+     std::uint8_t tail_hidden_valid           = 0;
+     std::uint32_t text_committed_frontier    = 0;
+@@ -277,6 +279,7 @@ void write_session(SnapshotWriter& writer, const SnapshotSession& session) {
+     writer.pod(session.execution_frontier);
+     writer.pod(session.text_kv_valid);
+     writer.pod(session.mtp_kv_valid);
++    writer.pod(session.dflash_context_frontier);
+     writer.pod(session.rope_delta);
+     writer.pod(session.tail_hidden_valid);
+     writer.pod(session.text_committed_frontier);
+@@ -293,6 +296,7 @@ SnapshotSession read_session(SnapshotReader& reader) {
+     session.execution_frontier         = reader.pod<std::uint32_t>();
+     session.text_kv_valid              = reader.pod<std::uint32_t>();
+     session.mtp_kv_valid               = reader.pod<std::uint32_t>();
++    session.dflash_context_frontier    = reader.pod<std::uint32_t>();
+     session.rope_delta                 = reader.pod<std::int32_t>();
+     session.tail_hidden_valid          = reader.pod<std::uint8_t>();
+     session.text_committed_frontier    = reader.pod<std::uint32_t>();
+@@ -432,10 +436,6 @@ SessionSnapshot ProgramImpl::save_continuation(const ContinuationHandle& continu
+     if (has_context_transaction() || pending_transaction_) {
+         throw std::logic_error("cannot snapshot a session during a resource transaction");
+     }
+-    if (is_masked_draft_backend(speculative_backend)) {
+-        throw std::invalid_argument(
+-            "session persistence does not support the DFlash/DFlash2 backends");
+-    }
+     const SequenceState& sequence = continuation_states[ContractAccess::index(continuation)];
+ 
+     // The ledger frontier is not validated: abort salvage publishes without advancing it, and a
+@@ -475,10 +475,44 @@ SessionSnapshot ProgramImpl::save_continuation(const ContinuationHandle& continu
+     synchronize_transfer_streams();
+     const StateImageHostLayout& state_layout = state_images->host_layout();
+ 
++    // Carry compatible shared prefixes as private anchors too. A newly opened chat
++    // can then reuse the system/tool prefix even after a server restart. Exact
++    // tokens AND multimodal/position identity must match before borrowing an image.
++    std::vector<LongAnchorCheckpoint> saved_anchors = sequence.long_anchors;
++    for (std::uint32_t index = 0; index < shared_prefix_capacity; ++index) {
++        if (!is_live_shared_prefix_role(shared_prefix_slots[index].role)) { continue; }
++        const SharedPrefixState& shared = shared_prefix_states[index];
++        if (!shared.identity || shared.frontier == 0 || shared.frontier > sequence.execution_frontier ||
++            shared.rope_delta != sequence.rope_delta ||
++            !state_store->valid(shared.state) ||
++            state_store->residency(shared.state) == StateReplicaResidency::None) { continue; }
++        const auto prefix = shared.identity->ledger();
++        const auto* prefix_identity = shared.identity->prefix_identity();
++        if (prefix.size() != shared.frontier || !prefix_identity ||
++            !std::equal(prefix.begin(), prefix.end(), ledger.begin()) ||
++            !identity.prefix_equals(*prefix_identity, shared.frontier) ||
++            std::any_of(saved_anchors.begin(), saved_anchors.end(), [&](const auto& anchor) {
++                return anchor.frontier == shared.frontier;
++            })) { continue; }
++        saved_anchors.push_back(LongAnchorCheckpoint{shared.state, shared.frontier,
++                                                     0, shared.rebuild_work});
++    }
++    // Restore admits ordinals up to its anchor budget. Keep the earliest shared
++    // system prefix even when all private slots were occupied before saving.
++    // Ordinals are snapshot-local lookup keys, not token positions.
++    std::stable_sort(saved_anchors.begin(), saved_anchors.end(),
++                     [](const auto& a, const auto& b) { return a.frontier < b.frontier; });
++    if (saved_anchors.size() > kMaximumSnapshotAnchors) {
++        saved_anchors.resize(kMaximumSnapshotAnchors);
++    }
++    for (std::size_t i = 0; i < saved_anchors.size(); ++i) {
++        saved_anchors[i].ordinal = static_cast<std::uint32_t>(i + 1U);
++    }
++
+     // Checkpoint directory: each checkpoint names one entry of a deduplicated StateImage table,
+     // since a rewrite checkpoint or anchor may alias the endpoint image.
+     std::vector<StateImageHandle> unique_states;
+-    unique_states.reserve(2U + sequence.long_anchors.size());
++    unique_states.reserve(2U + saved_anchors.size());
+     const auto image_index = [&](StateImageHandle handle) -> std::int32_t {
+         if (!state_store->valid(handle) ||
+             state_store->residency(handle) == StateReplicaResidency::None) {
+@@ -499,8 +533,8 @@ SessionSnapshot ProgramImpl::save_continuation(const ContinuationHandle& continu
+         rewrite_image = image_index(*sequence.rewrite_state);
+     }
+     std::vector<std::int32_t> anchor_images;
+-    anchor_images.reserve(sequence.long_anchors.size());
+-    for (const LongAnchorCheckpoint& anchor : sequence.long_anchors) {
++    anchor_images.reserve(saved_anchors.size());
++    for (const LongAnchorCheckpoint& anchor : saved_anchors) {
+         anchor_images.push_back(image_index(anchor.state));
+     }
+ 
+@@ -554,6 +588,7 @@ SessionSnapshot ProgramImpl::save_continuation(const ContinuationHandle& continu
+     session.execution_frontier         = sequence.execution_frontier;
+     session.text_kv_valid              = sequence.text_kv_valid;
+     session.mtp_kv_valid               = sequence.mtp_kv_valid;
++    session.dflash_context_frontier    = sequence.dflash_context_frontier;
+     session.rope_delta                 = sequence.rope_delta;
+     session.tail_hidden_valid          = sequence.tail_hidden_valid ? 1 : 0;
+     session.text_committed_frontier    = text_committed;
+@@ -587,8 +622,8 @@ SessionSnapshot ProgramImpl::save_continuation(const ContinuationHandle& continu
+     writer.pod<std::uint8_t>(static_cast<std::uint8_t>(sequence.rewrite_checkpoint.kind));
+     writer.pod<std::uint32_t>(sequence.rewrite_checkpoint.frontier);
+     write_work(writer, sequence.rewrite_checkpoint.rebuild_work);
+-    writer.pod<std::uint32_t>(static_cast<std::uint32_t>(sequence.long_anchors.size()));
+-    for (const LongAnchorCheckpoint& anchor : sequence.long_anchors) {
++    writer.pod<std::uint32_t>(static_cast<std::uint32_t>(saved_anchors.size()));
++    for (const LongAnchorCheckpoint& anchor : saved_anchors) {
+         writer.pod<std::uint32_t>(anchor.frontier);
+         writer.pod<std::uint32_t>(anchor.ordinal);
+         write_work(writer, anchor.rebuild_work);
+@@ -693,10 +728,6 @@ ContinuationHandle ProgramImpl::restore_continuation(std::span<const std::uint8_
+     if (has_context_transaction() || pending_transaction_) {
+         throw std::logic_error("cannot restore a session during a resource transaction");
+     }
+-    if (is_masked_draft_backend(speculative_backend)) {
+-        throw std::invalid_argument(
+-            "session persistence does not support the DFlash/DFlash2 backends");
+-    }
+     if (hybrid_) {
+         // Hybrid mode retains context in its prefix index and never holds a catalogued
+         // continuation, so there is nothing a restored session could be adopted as.
+@@ -790,6 +821,10 @@ ContinuationHandle ProgramImpl::restore_continuation(std::span<const std::uint8_
+         session.execution_frontier > session.text_committed_frontier ||
+         session.text_committed_frontier > capacity ||
+         session.mtp_kv_valid > session.backend_committed_frontier ||
++        session.dflash_context_frontier > session.text_committed_frontier ||
++        (!is_masked_draft_backend(speculative_backend) && session.dflash_context_frontier != 0) ||
++        (speculative_backend == SpeculativeBackend::DFlash &&
++         session.dflash_context_frontier > session.backend_committed_frontier) ||
+         session.backend_committed_frontier > capacity ||
+         session.rebuild_work.tokens > session.execution_frontier ||
+         session.rebuild_tail_begin > session.execution_frontier) {
+@@ -947,12 +982,17 @@ ContinuationHandle ProgramImpl::restore_continuation(std::span<const std::uint8_
+     std::optional<KVAddressSpaceHandle> text_address;
+     std::optional<KVAddressSpaceHandle> backend_address;
+     try {
+-        // Every restored image prefers a Device slot and falls back to a HostOnly replica, the
+-        // shape a demoted checkpoint has, when the Device pool is occupied.
++        // Keep sparse anchors on Host when possible. Filling every Device slot with optional
++        // images makes a retained-prefix fork infeasible: admission must preserve the source
++        // owner and therefore cannot reclaim its other images to obtain an active destination.
++        // The endpoint stays on Device for the usual same-chat continuation.
+         const auto stage_image =
+-            [&](const std::uint8_t* payload) -> std::optional<StateImageHandle> {
++            [&](const std::uint8_t* payload, bool prefer_host = false) -> std::optional<StateImageHandle> {
+             const qwen3_5::HostStateImageConstView view{
+                 reinterpret_cast<const std::byte*>(payload), &state_layout};
++            if (prefer_host) {
++                if (auto handle = state_store->adopt_host_image(view)) { return handle; }
++            }
+             std::optional<StateImageHandle> handle = state_store->reserve_reset(streams);
+             if (handle) {
+                 state_images->copy_from_host(view, state_store->physical_slot(*handle), streams);
+@@ -972,7 +1012,7 @@ ContinuationHandle ProgramImpl::restore_continuation(std::span<const std::uint8_
+         const auto upload_image = [&](std::int32_t index) {
+             const auto position = static_cast<std::size_t>(index);
+             if (index == endpoint_image || extra_images[position]) { return; }
+-            extra_images[position] = stage_image(image_payloads[position]);
++            extra_images[position] = stage_image(image_payloads[position], true);
+         };
+         if (rewrite_valid != 0) { upload_image(rewrite_image); }
+         for (const SnapshotAnchor& anchor : anchors) {
+@@ -1048,7 +1088,7 @@ ContinuationHandle ProgramImpl::restore_continuation(std::span<const std::uint8_
+         sequence.ledger_frontier         = session.tokens;
+         sequence.text_kv_valid           = session.text_kv_valid;
+         sequence.mtp_kv_valid            = session.mtp_kv_valid;
+-        sequence.dflash_context_frontier = 0;
++        sequence.dflash_context_frontier = session.dflash_context_frontier;
+         sequence.rope_delta              = session.rope_delta;
+         sequence.mtp_draft_count         = 0;
+         sequence.tail_hidden_valid       = session.tail_hidden_valid != 0;

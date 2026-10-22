@@ -47,10 +47,15 @@ Node 22.19+ is required. Development provider dependencies may report skipped op
 
 Engine: [iamwavecut/ninfer-all](https://github.com/iamwavecut/ninfer-all), tested source revision `5ed86dff9fe3a5a0776f40a7aea86cf381da990d`.
 
-The runtime installer downloads the **tested Linux x86_64 Blackwell sm120a** executable from its pinned public OCI image. It verifies both the image-manifest digest and runtime-layer digest before extracting regular files under the expected architecture path. Other GPUs/platforms need a compatible existing `ninfer-serve` executable selected in the card. The host still needs the corresponding CUDA and multimedia shared libraries; missing-library failures appear in the operation log. Model weights are never included or silently downloaded.
+The runtime installer builds the pinned upstream source with the engine patch shipped in `patches/ninfer-dflash-checkpoints.patch`. The patch adds native DFlash/DFlash2 disk snapshots, including draft-cache frontier metadata and reusable system-prefix anchors. It does not modify DSH. Existing profiles and binaries are not silently replaced.
 
-Image manifest: `sha256:1f59c4a8285c7c0f9ccb6e5645d112db39956718df9065837ce2a6a3832c6aa9`.
-Runtime layer: `sha256:53b3ce944aa9ddbe64b46380affd2e3f45e28ba93b316f2f85ec7f664e0fc9ff`.
+Build prerequisites are Git, CMake 3.24+, Ninja, a compatible C++ compiler, CUDA 13.1 (including NVTX3 headers), and FFmpeg/cURL development packages. The default target is Linux x86_64 Blackwell `sm120a`. To select another supported GPU architecture or toolchain:
+
+```sh
+CMAKE=/path/to/cmake npm run build:checkpoints -- --root /path/to/runtime --arch 120a --jobs 8
+```
+
+`NINFER_CMAKE_ARGS` accepts a JSON array of additional CMake arguments. The build writes `checkpoint-build.json` with the upstream revision and patch hash. Select the resulting `build/apps/ninfer-serve` executable in the profile. The optional `scripts/fetch-ninfer.py` still fetches the pinned stock OCI binary; that stock binary does **not** support DFlash disk checkpoints. Model weights remain external.
 
 NInfer consumes `.ninfer` artifacts. GGUF-to-NInfer conversion is not implemented by this plugin. NInfer's server flags, calibration action, environment and optional temporary power-profile hold are exposed. Calibration is user-triggered and saves its profile path. There is no automatic tuning in this plugin.
 
@@ -90,7 +95,7 @@ is required. An empty level list hides the reasoning selector for that profile.
 
 Optionally install `dsh-model-scheduler` for shared GPU admission, queued chat switching, manual load/unload and separate configurable idle retention (five minutes by default) and switch grace (30 seconds by default). This provider remains independently usable. Scheduling policy lives in that separate Cordis service; no Harness core changes are required. Owned engine process groups are stopped before GPU release is reported. External servers are detached, never killed.
 
-## DFlash2 cache limitation
+## Per-chat checkpoints and shared prefixes
 
 The per-profile **Keep model loaded while idle** setting (`keepWarm: true`) preserves the running engine and its in-memory cache when the optional Model Scheduler is installed. Another queued model, image job, manual Unload or shutdown can still release it. Other profiles retain their normal idle timer.
 
@@ -98,6 +103,14 @@ For the qualified Qwen3.8 profile, `cacheStableHistory: true` enables positional
 
 This processes new user text after Send. It does not process drafts or generate background answers. Changing the template requires a one-time cache rebuild. Cold loads, history edits, compaction, reasoning changes and non-additive tool changes can still require recomputation. Do not enable this template on unrelated model families without validation.
 
-The tuned DFlash2 profile stays unchanged. NInfer explicitly rejects disk session persistence with DFlash/DFlash2; this plugin therefore adds no unsupported checkpoint flags or alternate MTP profile. Its native in-memory reuse remains available while the server runs. Unloading or restarting the engine requires rebuilding its cache.
+With the patched engine selected, enable **Save per-chat KV checkpoints**. The provider serializes restore → inference → save through its official DSH adapter. Every successfully completed inference step (including tool calls and token-limit stops) publishes a durable native checkpoint. Interrupted or failed steps retain the preceding valid checkpoint. Each chat retains its two most recently used model configurations. Auxiliary summarization/title calls and externally attached servers do not write checkpoints.
+
+Checkpoints live in the plugin data directory under `kv/chats/`, with hashed chat IDs, private file permissions, atomic manifests, and compatibility fingerprints covering weights, executable and launch settings. Their contents include conversation state; treat this directory as private chat data. A missing, incompatible or corrupt checkpoint falls back to normal prefill and exposes a warning in model status.
+
+When switching chats, the provider first checks for a compatible continuation still resident in the native GPU/host cache. Otherwise it restores a snapshot from disk. New chats may restore a matching previous checkpoint, but native token-prefix validation and explicit system/tool anchors restrict reuse to the identical prefix; another chat's user/assistant content is not added to the request. Edits and compaction recompute from the last compatible native anchor, which may precede the exact edit position.
+
+The patch uses NInfer's original checkpoint catalog (`--slot-save-path`), because its alternate hybrid cache does not expose native snapshots. The plugin manages that directory and rejects conflicting cache flags. It defaults to eight private anchors per continuation and an 8 GiB host-cache budget; explicit profile values take precedence. Smaller budgets can fail startup when the recurrent-state images exceed the engine's allocation limit. This path can have different memory/performance characteristics from stock DFlash2 caching. Snapshots are native full snapshots, not incremental deltas; long contexts can require substantial disk space and write bandwidth. Same-model resident reuse avoids reloading weights, but disk transfers and different-model loads are not guaranteed to finish in one or two seconds. See [measured checkpoint validation](docs/CHECKPOINT-VALIDATION.md) for the tested configuration and limitations.
 
 The **Off** reasoning level disables thinking with `chat_template_kwargs.enable_thinking=false`; it does not send the literal `off` as an unsupported reasoning-effort value. Existing version-1 model profiles gain Off once on upgrade; custom names and Medium defaults are preserved. Set a custom row's backend value to `off` for the same behavior.
+
+To qualify the native checkpoint path on your model, start a managed checkpoint-enabled server and run `python3 scripts/verify-checkpoints.py capture --url http://127.0.0.1:PORT --model MODEL --report REPORT.json`. Restart that server, run the same command with `restore`, then restart and run it with `cold`. The script compares restored continuation against uninterrupted greedy output, checks actual native cached-token counts, and compares shared-prefix reuse against a cold new chat. It writes one test snapshot named `dsh-qualification.kv`; use a dedicated test profile. This requires real model weights and GPU access; the ordinary plugin tests do not substitute for it.

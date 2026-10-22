@@ -1,6 +1,6 @@
 {
   "name": "dsh-ninfer",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "NInfer local inference provider, model profiles and engine controls for DeepSeek Harness.",
   "type": "module",
   "license": "MIT",
@@ -29,12 +29,14 @@
     "cordis.patch.yml",
     "docs",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "patches"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
     "check": "node --check index.js && node --check client.js",
-    "setup:engine": "node scripts/setup-engine.js"
+    "setup:engine": "node scripts/setup-engine.js",
+    "build:checkpoints": "node scripts/build-checkpoint-engine.js"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5",

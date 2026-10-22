@@ -6,3 +6,13 @@ test('CLI overrides normalize into locked high-level controls',()=>{const p=fres
 test('unsupported K/V selections fail before launch',()=>{const p=freshProfile('strata');p.kvK='Q4';p.kvV='FP16';assert.throws(()=>normalizeProfile(p,'strata'),/Unsupported/);});
 test('imported argument vectors retain exact ordering until an inference control changes',()=>{const p=freshProfile('strata');p.importedEngineArgs=['--prefill','512','--kv','fp16'];p.importedFingerprint=launchFingerprint(p);assert.deepEqual(strataArgs(p),p.importedEngineArgs);p.context=8192;assert.notDeepEqual(strataArgs(p),p.importedEngineArgs);});
 test('argv values have no shell expansion and tuple parameters remain adjacent',()=>{assert.deepEqual(optionArgs({'--path':'$(touch /tmp/nope)','--control-vector-layer-range':{argv:[1,48]},'--native-dense-gguf':['a','b']}),['--path','$(touch /tmp/nope)','--control-vector-layer-range','1','48','--native-dense-gguf','a','--native-dense-gguf','b']);});
+
+test('per-chat checkpoints own the save directory and reject conflicting cache flags',()=>{
+ const p={...ninferSeed(),kvCache:true};assert.ok(ninferArgs(p).includes('--max-long-anchors-per-continuation'));
+ const args=ninferArgs(p);assert.equal(args[args.indexOf('--host-cache-mib')+1],'8192');
+ const custom=ninferArgs({...p,options:{...p.options,'--host-cache-mib':16384}});assert.equal(custom[custom.indexOf('--host-cache-mib')+1],'16384');
+ for(const flag of ['--slot-save-path','--use-alt-prefix-caching','--no-prefix-reuse']){
+  assert.throws(()=>ninferArgs({...p,options:{...p.options,[flag]:flag==='--slot-save-path'?'/tmp/override':true}}),/checkpoints|plugin manages/);
+  assert.throws(()=>ninferArgs({...p,extraArgs:[flag+'=true']}),/checkpoints|plugin manages/);
+ }
+});
