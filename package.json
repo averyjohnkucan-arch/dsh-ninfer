@@ -1,6 +1,6 @@
 {
   "name": "dsh-ninfer",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "NInfer local inference provider, model profiles and engine controls for DeepSeek Harness.",
   "type": "module",
   "license": "MIT",

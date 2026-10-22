@@ -11,7 +11,7 @@ test('per-chat checkpoints own the save directory and reject conflicting cache f
  const p={...ninferSeed(),kvCache:true};assert.ok(ninferArgs(p).includes('--max-long-anchors-per-continuation'));
  const args=ninferArgs(p);assert.equal(args[args.indexOf('--host-cache-mib')+1],'8192');
  const custom=ninferArgs({...p,options:{...p.options,'--host-cache-mib':16384}});assert.equal(custom[custom.indexOf('--host-cache-mib')+1],'16384');
- for(const flag of ['--slot-save-path','--use-alt-prefix-caching','--no-prefix-reuse']){
+ for(const flag of ['--slot-save-path','--use-alt-prefix-caching','--no-prefix-reuse','--auto-save-evicted']){
   assert.throws(()=>ninferArgs({...p,options:{...p.options,[flag]:flag==='--slot-save-path'?'/tmp/override':true}}),/checkpoints|plugin manages/);
   assert.throws(()=>ninferArgs({...p,extraArgs:[flag+'=true']}),/checkpoints|plugin manages/);
  }

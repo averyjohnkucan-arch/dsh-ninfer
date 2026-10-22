@@ -81,3 +81,11 @@ following the capture/restart/restore/restart/cold sequence in the README.
 The regression suite separately checks durable publication, failure retention,
 two-model eviction, resident-cache avoidance of disk restore, per-chat isolation,
 prefix matching, cancelled waiters and the real public provider callback path.
+
+## Independent base checkpoint — 0.1.6
+
+The base builder sends only the system/tool payload plus an empty synthetic user message and one discarded output token. The real user question is absent from the seed. The independent base is keyed by model compatibility and the system/tool/rendering configuration. Fresh chats use its native prefix anchor; existing chats prefer their latest private checkpoint.
+
+On the standard Qwen rk4v4 profile, the independent seed took 11.375 s to build once and occupied 417,500,283 bytes. After stopping and restarting the engine, a fresh chat reused 3,105 tokens. The complete short response took 1.754 s after restoration, versus 5.515 s on a second cold restart, with exactly matching greedy output. These request times exclude model startup and disk restoration. The test deleted the private chat checkpoint before restoring the independent base, and separately verified that a second successful step replaced the first snapshot.
+
+All 43 plugin tests pass, including synthetic seed isolation, base reuse after chat deletion, prompt/tool invalidation, failure/cancellation behavior and own-chat checkpoint precedence. Native eviction auto-save is rejected when plugin checkpoints are enabled, so it cannot create unmanaged copies outside the two-model retention policy.
