@@ -1,6 +1,6 @@
 {
   "name": "dsh-ninfer",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "NInfer local inference provider, model profiles and engine controls for DeepSeek Harness.",
   "type": "module",
   "license": "MIT",
@@ -30,7 +30,9 @@
     "docs",
     "README.md",
     "LICENSE",
-    "patches"
+    "patches",
+    "lib/recommended-models.mjs",
+    "lib/recommended-models.json"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",

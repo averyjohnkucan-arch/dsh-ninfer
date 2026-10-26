@@ -463,7 +463,7 @@
     "flag": "--kv-dtype",
     "kind": "text",
     "metavar": "T",
-    "help": "KV storage: bf16 (default), int8, fp8, rk8v4, rk4v4, rk4v4-e8, rk2v4-e8, nvfp4 or k8v4",
+    "help": "KV storage: bf16 (default), int8, fp8, rk8v4, rk4v4, rk4v4-e8, rk2v4-e8, nvfp4 or k8v4; also q5_1 and q6_0 with the packaged NVFP4/KV engine patch",
     "group": "Kv Cache"
   },
   {
@@ -1248,5 +1248,19 @@
     "metavar": "",
     "help": "--embedding-q4 | --embedding-q6",
     "group": "Aliases"
+  },
+  {
+    "flag": "--embedding-residency",
+    "kind": "text",
+    "metavar": "device|host",
+    "help": "Token embedding table residency: device (default) or pinned host memory; stored bytes are preserved.",
+    "group": "Memory"
+  },
+  {
+    "flag": "--output-head-residency",
+    "kind": "text",
+    "metavar": "device|host",
+    "help": "Output head table residency: device (default) or pinned host memory; stored bytes are preserved.",
+    "group": "Memory"
   }
 ]

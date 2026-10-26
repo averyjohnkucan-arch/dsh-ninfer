@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "huihui_qwen38_27b_iq3s",
+      "name": "QWEN 3.8 27B \u00b7 HUIHUI IQ3_S Abliterated Vision DFlash2 K7",
+      "recommended": true,
+      "files": [
+        {
+          "name": "huihui-qwen3_8-27b-iq3s-vision-mtp-dflash2.ninfer",
+          "role": "modelPath",
+          "target": "huihui-qwen3_8-27b-iq3s-vision-mtp-dflash2.ninfer",
+          "downloadable": false,
+          "evidence": "Local conversion; hash identifies the converted artifact. Source GGUF is not the .ninfer artifact.",
+          "sha256": "466ce8b04b3514e1cf96eca26b844e4558e8bd1576fb8a3d6dd5094b5e8a2d62",
+          "revision": "1c69098e9c32db6dc06fc48f1d6cc75ad07da89e",
+          "repo": "huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF",
+          "size": 15017456896
+        }
+      ],
+      "notes": "From your saved setup. Confirm engine compatibility and memory fit before loading. Local runtime packs are prepared separately.",
+      "settings": {
+        "context": 262144,
+        "kvK": "Q8",
+        "kvV": "Q8"
+      }
+    },
+    {
+      "id": "qwen3_8_27b",
+      "name": "QWEN 3.8 27B \u00b7 NEROUED NInfer Non-speculative",
+      "recommended": true,
+      "files": [
+        {
+          "name": "qwen3_8_27b.ninfer",
+          "role": "modelPath",
+          "target": "qwen3_8_27b.ninfer",
+          "downloadable": true,
+          "evidence": "Local file identity; needs a verified source pin",
+          "sha256": "81f924d440c27261d820c19a9f8d45794c5aee410f8a68bd358133fa8c0375da",
+          "revision": "5ed86dff9fe3a5a0776f40a7aea86cf381da990d",
+          "repo": "neroued/Qwen3.8-27B-NInfer",
+          "file": "qwen3_8_27b.ninfer",
+          "size": 20437521664
+        }
+      ],
+      "notes": "From your saved setup. Confirm engine compatibility and memory fit before loading. Local runtime packs are prepared separately.",
+      "settings": {
+        "context": 262144,
+        "kvK": "Q4",
+        "kvV": "Q4"
+      }
+    },
+    {
+      "id": "qwen38_27b_nvfp4full_q5_1",
+      "name": "QWEN 3.8 27B \u00b7 NVFP4-full Vision DFlash2 K7",
+      "recommended": true,
+      "files": [
+        {
+          "name": "qwen3_8_27b_nvfp4full.ninfer",
+          "role": "modelPath",
+          "target": "qwen3_8_27b_nvfp4full.ninfer",
+          "downloadable": true,
+          "evidence": "Local file identity; needs a verified source pin",
+          "sha256": "ac98cd392c84a04b2a21c2f5c3988dece88d20a697ba1de663fb32d5998b8ee9",
+          "revision": "43d603cdaa33b6d908f79c8da932c415f50e090a",
+          "repo": "cometkim/Qwen3.8-27B-nvfp4full-NInfer",
+          "file": "qwen3_8_27b_nvfp4full.ninfer",
+          "size": 19407229188
+        },
+        {
+          "name": "qwen3_8_27b_nvfp4full.ninfer",
+          "role": "projectorPath",
+          "target": "qwen3_8_27b_nvfp4full.ninfer",
+          "downloadable": false,
+          "evidence": "Local file identity; needs a verified source pin",
+          "sha256": "ac98cd392c84a04b2a21c2f5c3988dece88d20a697ba1de663fb32d5998b8ee9",
+          "size": 19407229188
+        }
+      ],
+      "notes": "From your saved setup. Confirm engine compatibility and memory fit before loading. Local runtime packs are prepared separately.",
+      "settings": {
+        "context": 196608,
+        "kvK": "Q5_1",
+        "kvV": "Q5_1"
+      }
+    }
+  ]
+}

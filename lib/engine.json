@@ -3,5 +3,16 @@
   "title": "NInfer",
   "source": "https://github.com/iamwavecut/ninfer-all",
   "revision": "5ed86dff9fe3a5a0776f40a7aea86cf381da990d",
-  "catalogGeneratedFrom": "ninfer-test/bin/ninfer-serve --help"
+  "catalogGeneratedFrom": "ninfer-test/bin/ninfer-serve --help",
+  "patch": "patches/ninfer-nvfp4-kv.patch",
+  "patchSha256": "362d65f699666fc82ad52fc067bdb68e63aebc7648dff3d0ff94c57922c14104",
+  "capabilities": {
+    "kvStorage": [
+      "q5_1",
+      "q6_0"
+    ],
+    "dflash2Nvfp4": true,
+    "qualification": "Five focused GPU tests and historical native262K forward passed; current allGPU throughput/quality/live acceptance pending."
+  },
+  "sourceTree": "334f06883b30f177b0a952fe9377cb0451d0f59e"
 }

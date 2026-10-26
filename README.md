@@ -114,3 +114,15 @@ The patch uses NInfer's original checkpoint catalog (`--slot-save-path`), becaus
 The **Off** reasoning level disables thinking with `chat_template_kwargs.enable_thinking=false`; it does not send the literal `off` as an unsupported reasoning-effort value. Existing version-1 model profiles gain Off once on upgrade; custom names and Medium defaults are preserved. Set a custom row's backend value to `off` for the same behavior.
 
 To qualify the native checkpoint path on your model, start a managed checkpoint-enabled server and run `python3 scripts/verify-checkpoints.py capture --url http://127.0.0.1:PORT --model MODEL --report REPORT.json`. Restart that server, run the same command with `restore`, then restart and run it with `cold`. The script compares restored continuation against uninterrupted greedy output, checks actual native cached-token counts, and compares shared-prefix reuse against a cold new chat. It writes one test snapshot named `dsh-qualification.kv`; use a dedicated test profile. This requires real model weights and GPU access; the ordinary plugin tests do not substitute for it.
+
+## Portable engine installation
+
+Fresh installs begin without saved machine-specific profiles. Import your local `.ninfer` weights, then use engine setup for that profile. Existing saved profiles are preserved. The engine patch is bundled and verified against a pinned source revision and full resulting source tree; new builds use separate revision/patch directories. See [NVFP4 and KV engine installation](docs/nvfp4-kv-engine.md) for supported controls, prerequisites and current qualification limits.
+
+## Recommended models and verified downloads
+
+Open **Recommended models · exact revisions and hashes** in this plugin's settings card. The catalog records the checkpoints/components from the owner's configured setup with immutable repository revisions and SHA-256 (or Git blob hashes for small snapshot assets). Expand **Files, sizes and exact identities** before selecting a set.
+
+**Download / verify recommended** saves a complete pinned set in this plugin's private `recommended-models` directory. Downloads resume from partial files, validate content before publishing final files, preserve existing models, and expose progress, cancellation and explicit failures. Repeating the action verifies/reuses existing files. Downloads do not start inference. **Add downloaded files** fills the existing model import/edit workflow for review and saving. Runtime installation remains separate.
+
+Some configured artifacts are locally converted or assembled from multiple sources. Their exact local hashes are listed, but downloading the original publisher checkpoint cannot recreate those bytes. Use **Add existing model** and the normal importer for those entries. No incomplete component set is presented as a working download. Recommendations describe the saved setup; they do not establish memory fit or model quality on another computer.
