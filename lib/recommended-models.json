@@ -37,7 +37,7 @@
           "downloadable": true,
           "evidence": "Local file identity; needs a verified source pin",
           "sha256": "81f924d440c27261d820c19a9f8d45794c5aee410f8a68bd358133fa8c0375da",
-          "revision": "5ed86dff9fe3a5a0776f40a7aea86cf381da990d",
+          "revision": "1cbd84e7221e51186bd7f093a149912d2489625b",
           "repo": "neroued/Qwen3.8-27B-NInfer",
           "file": "qwen3_8_27b.ninfer",
           "size": 20437521664
