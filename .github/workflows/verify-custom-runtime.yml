@@ -1,0 +1,90 @@
+name: verify-custom-runtime
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-custom-runtime.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUNTIME_TAG: engine-5ed86dff9fe3-362d65f69966-blackwell-r1
+      MANIFEST_SHA256: 611eb2fd7fe285cac8f662d9e7deb07c0437cba7bfb39bbf3764c80a24015e4a
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the verified draft assets and download them
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,subprocess,time
+          expected={'ninfer-custom-linux-x64-blackwell.tar.gz.001': 1567469892, 'runtime-manifest.json': 52042}
+          for attempt in range(80):
+              assets=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/releases/427186233/assets'],text=True))
+              complete={a['name']:a['size'] for a in assets if a['state']=='uploaded'}
+              if all(complete.get(name)==size for name,size in expected.items()):break
+              time.sleep(15)
+          else:raise SystemExit('The draft runtime upload has not completed')
+          PYCODE
+          gh release download "$RUNTIME_TAG" --repo "$GITHUB_REPOSITORY" --dir runtime-download
+      - name: Install the test-only CUDA driver stub
+        run: |
+          curl -fsSLo /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i /tmp/cuda-keyring.deb
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cuda-driver-dev-13-1
+      - name: Verify every file and both launchers on a clean Ubuntu host
+        run: |
+          python3 - <<'PYCODE'
+          import hashlib,json,os,pathlib,shutil,subprocess,tarfile,tempfile
+          root=pathlib.Path('runtime-download')
+          def digest(path):
+              h=hashlib.sha256()
+              with path.open('rb') as stream:
+                  while block:=stream.read(4*1024*1024):h.update(block)
+              return h.hexdigest()
+          assert digest(root/'runtime-manifest.json')==os.environ['MANIFEST_SHA256']
+          manifest=json.loads((root/'runtime-manifest.json').read_text())
+          engine=json.loads(pathlib.Path('lib/engine.json').read_text())
+          for key,expected in [('sourceRevision',engine['revision']),('sourceTree',engine['sourceTree']),('patchSha256',engine['patchSha256'])]:
+              assert manifest[key]==expected,key
+          with tempfile.TemporaryDirectory() as temporary:
+              stage=pathlib.Path(temporary)
+              archive=stage/'runtime.tar.gz'
+              with archive.open('wb') as output:
+                  for part in manifest['parts']:
+                      source=root/part['name']
+                      assert source.stat().st_size==part['size'] and digest(source)==part['sha256']
+                      with source.open('rb') as stream:shutil.copyfileobj(stream,output,4*1024*1024)
+              assert digest(archive)==manifest['archiveSha256']
+              with tarfile.open(archive) as stream:stream.extractall(stage,filter='data')
+              package=stage/manifest['directory']
+              for item in manifest['files']:
+                  path=package/item['name']
+                  assert path.stat().st_size==item['size'] and digest(path)==item['sha256'],item['name']
+              # The hosted test machine has no GPU. This file exists only in the test extraction.
+              stub=pathlib.Path('/usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs/libcuda.so')
+              shutil.copy2(stub,package/'compat/usr/lib/x86_64-linux-gnu/libcuda.so.1')
+              env=dict(os.environ)
+              env.pop('LD_LIBRARY_PATH',None)
+              text=subprocess.check_output([str(package/'ninfer-serve'),'--help'],env=env,text=True,stderr=subprocess.STDOUT)
+              assert all(flag in text for flag in ['q5_1','q6_0','--embedding-residency','--output-head-residency'])
+              subprocess.run([str(package/'ninfer-calibrate'),'--help'],env=env,check=True)
+          print('Archive SHA256, source provenance, all private libraries and both launchers passed on Ubuntu 24.04.')
+          PYCODE
+      - name: Publish the verified runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RUNTIME_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+      - name: Stop the superseded broad architecture build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/40747223752" --jq .status)
+          if [ "$state" != completed ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/40747223752/cancel" --method POST || true
+          fi
