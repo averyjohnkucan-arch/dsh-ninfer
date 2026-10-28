@@ -8,8 +8,8 @@ test('imported argument vectors retain exact ordering until an inference control
 test('argv values have no shell expansion and tuple parameters remain adjacent',()=>{assert.deepEqual(optionArgs({'--path':'$(touch /tmp/nope)','--control-vector-layer-range':{argv:[1,48]},'--native-dense-gguf':['a','b']}),['--path','$(touch /tmp/nope)','--control-vector-layer-range','1','48','--native-dense-gguf','a','--native-dense-gguf','b']);});
 
 test('per-chat checkpoints own the save directory and reject conflicting cache flags',()=>{
- const p={...ninferSeed(),kvCache:true};assert.ok(ninferArgs(p).includes('--max-long-anchors-per-continuation'));
- const args=ninferArgs(p);assert.equal(args[args.indexOf('--host-cache-mib')+1],'8192');
+ const p={...ninferSeed(),kvCache:true};assert.ok(!ninferArgs(p).includes('--max-long-anchors-per-continuation'));
+ const args=ninferArgs(p);assert.ok(!args.includes('--host-cache-mib'));
  const custom=ninferArgs({...p,options:{...p.options,'--host-cache-mib':16384}});assert.equal(custom[custom.indexOf('--host-cache-mib')+1],'16384');
  for(const flag of ['--slot-save-path','--use-alt-prefix-caching','--no-prefix-reuse','--auto-save-evicted']){
   assert.throws(()=>ninferArgs({...p,options:{...p.options,[flag]:flag==='--slot-save-path'?'/tmp/override':true}}),/checkpoints|plugin manages/);

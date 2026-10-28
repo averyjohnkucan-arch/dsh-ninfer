@@ -1,6 +1,6 @@
 {
   "name": "dsh-ninfer",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "NInfer local inference provider, model profiles and engine controls for DeepSeek Harness.",
   "type": "module",
   "license": "MIT",
@@ -35,7 +35,7 @@
     "lib/recommended-models.json"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js && python3 -m unittest discover -s test -p '*_test.py'",
     "check": "node --check index.js && node --check client.js",
     "setup:engine": "node scripts/setup-engine.js",
     "build:checkpoints": "node scripts/build-checkpoint-engine.js"

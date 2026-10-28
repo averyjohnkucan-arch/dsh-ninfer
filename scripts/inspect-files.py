@@ -4,7 +4,29 @@ SIZES={0:1,1:1,2:2,3:2,4:4,5:4,6:4,7:1,10:8,11:8,12:8}
 FORMATS={0:'B',1:'b',2:'H',3:'h',4:'I',5:'i',6:'f',7:'?',10:'Q',11:'q',12:'d'}
 def inspect(path):
  path=pathlib.Path(path)
- if path.suffix.lower()=='.ninfer':return {'path':str(path),'kind':'ninfer','name':path.stem}
+ if path.suffix.lower()=='.ninfer':
+  with path.open('rb') as f:
+   header=f.read(32)
+   if len(header)!=32 or header[:8]!=b'NINFER\0\3':raise ValueError(f'{path.name}: unsupported NInfer artifact header')
+   length=struct.unpack_from('<Q',header,8)[0]
+   if length>32*1024*1024:raise ValueError('NInfer manifest exceeds inspection limit')
+   raw=f.read(length)
+   if len(raw)!=length:raise ValueError(f'{path.name}: truncated NInfer manifest')
+   manifest=json.loads(raw)
+  components=manifest.get('components',{}); config=components.get('text',{}).get('config',{})
+  parts=[];missing=[]
+  for item in manifest.get('files',[]):
+   name=item.get('path')
+   if name is None:continue
+   part=pathlib.Path(name)
+   if part.is_absolute() or '..' in part.parts:raise ValueError('Unsafe NInfer shard path')
+   full=path.parent/part;parts.append(str(full))
+   if not full.is_file():missing.append(str(full))
+  context=config.get('max_position_embeddings')
+  if not isinstance(context,int) or not 1<=context<=4194304:context=None
+  return {'path':str(path),'kind':'ninfer','name':manifest.get('metadata',{}).get('name') or path.stem,
+          'nativeContext':context,'modelType':config.get('model_type'),'components':list(components),
+          'parts':parts,'missing':missing,'complete':not missing}
  with path.open('rb') as f:
   def take(n):
    data=f.read(n)
@@ -75,6 +97,12 @@ def assign(paths):
   if len(candidates)>1:raise ValueError('Multiple '+role+' files were selected; choose the one to use.')
   if candidates:
    result[key]=candidates[0]['path']
+   if role=='ninfer':
+    model=candidates[0]
+    result['suggestedName']=model['name']
+    result['modelFiles']=[model['path'],*model['parts']]
+    if isinstance(model.get('nativeContext'),int) and model['nativeContext']>0:result['context']=model['nativeContext']
+    if model['missing']:warnings.append('Missing NInfer shards: '+', '.join(model['missing']))
    if role=='mtp' and not candidates[0]['mtpImportSupported']:warnings.append('Selected MTP GGUF is not the packed Q2_0 MTP format accepted by Strata. Choose a prepared runtime or a supported packed MTP GGUF before importing.')
  if not result:raise ValueError('No model, projector or MTP artifact recognized')
  return {'assignments':result,'files':items,'warnings':warnings,'complete':not warnings}

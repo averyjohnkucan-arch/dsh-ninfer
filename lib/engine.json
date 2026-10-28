@@ -1,6 +1,8 @@
 {
   "id": "ninfer",
   "title": "NInfer",
+  "officialRelease": "2026-10-26.2",
+  "officialSourceRevision": "3d882fc116941d9233c40bf30f4d66dbaa3d24bd",
   "source": "https://github.com/iamwavecut/ninfer-all",
   "revision": "5ed86dff9fe3a5a0776f40a7aea86cf381da990d",
   "catalogGeneratedFrom": "ninfer-test/bin/ninfer-serve --help",

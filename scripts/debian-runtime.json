@@ -1,0 +1,80 @@
+[
+  {
+    "name": "libavcodec61",
+    "path": "pool/main/f/ffmpeg/libavcodec61_7.1.5-0+deb13u1_amd64.deb",
+    "size": 5821268,
+    "sha256": "6c07da16b276827973463bdd22607721df1c2877641c753d2418cf6bf49a0f2e"
+  },
+  {
+    "name": "libavformat61",
+    "path": "pool/main/f/ffmpeg/libavformat61_7.1.5-0+deb13u1_amd64.deb",
+    "size": 1203340,
+    "sha256": "4b580060cebbd33a25589ba71074e3106caf2826bcdb82cf8936b52960f34fb2"
+  },
+  {
+    "name": "libavutil59",
+    "path": "pool/main/f/ffmpeg/libavutil59_7.1.5-0+deb13u1_amd64.deb",
+    "size": 424956,
+    "sha256": "bb5fe4ea1eef338c8346bf67cc728dac20b94451ad31db391d03d1f2b3fa37c1"
+  },
+  {
+    "name": "libswresample5",
+    "path": "pool/main/f/ffmpeg/libswresample5_7.1.5-0+deb13u1_amd64.deb",
+    "size": 109260,
+    "sha256": "abe0f2f6a27db64a0d2d344e333880be997b2ec5431fc187a100078075680d94"
+  },
+  {
+    "name": "libswscale8",
+    "path": "pool/main/f/ffmpeg/libswscale8_7.1.5-0+deb13u1_amd64.deb",
+    "size": 241564,
+    "sha256": "cf43cf4fe02a02cd36b25a86a2fcdeeaca9cc22bb1c81239302514db701d4e6d"
+  },
+  {
+    "name": "libbluray2",
+    "path": "pool/main/libb/libbluray/libbluray2_1.3.4-1+b2_amd64.deb",
+    "size": 138412,
+    "sha256": "82f9e58e8dfdfeb57b273111433c335500c26553eb82f2a025e94ed9fdae2c21"
+  },
+  {
+    "name": "libtheoradec1",
+    "path": "pool/main/libt/libtheora/libtheoradec1_1.2.0~alpha1+dfsg-6_amd64.deb",
+    "size": 58432,
+    "sha256": "31c566d16b0a30f2c100d685d09b831d10d756bd043107ec6594c082274c0c74"
+  },
+  {
+    "name": "libtheoraenc1",
+    "path": "pool/main/libt/libtheora/libtheoraenc1_1.2.0~alpha1+dfsg-6_amd64.deb",
+    "size": 108424,
+    "sha256": "ce795eba6cdb510a52cd158dee7930a23667ffb4bdf07fbc44d4590edbf6f503"
+  },
+  {
+    "name": "libvpx9",
+    "path": "pool/main/libv/libvpx/libvpx9_1.15.0-2.1+deb13u1_amd64.deb",
+    "size": 1114728,
+    "sha256": "5c2baac5c97a1fe01c4f0a2216743b901dc72437351e7451725a394c08037bcc"
+  },
+  {
+    "name": "libxml2",
+    "path": "pool/main/libx/libxml2/libxml2_2.12.7+dfsg+really2.9.14-2.1+deb13u3_amd64.deb",
+    "size": 699724,
+    "sha256": "e0c6b63ce4602a036a526f60fe5e6c1586710688058d98fc1001b9b3147b7efd"
+  },
+  {
+    "name": "librav1e0.7",
+    "path": "pool/main/r/rust-rav1e/librav1e0.7_0.7.1-9+b2_amd64.deb",
+    "size": 946396,
+    "sha256": "d5b1373a8d6905ee4523faf1db7a626dc660e03836ec91b616e57ba386f47eb6"
+  },
+  {
+    "name": "libx264-164",
+    "path": "pool/main/x/x264/libx264-164_0.164.3108+git31e19f9-2+b1_amd64.deb",
+    "size": 558464,
+    "sha256": "325c90dc0888be316c8979b94aee546d223d4edf03b30927d1e9d431f67e33b2"
+  },
+  {
+    "name": "libudfread0",
+    "path": "pool/main/libu/libudfread/libudfread0_1.1.2-1+b2_amd64.deb",
+    "size": 17712,
+    "sha256": "dbb34708521e4e895d1e061b765548ea408e670c8b2a17e84529166afa88e5f1"
+  }
+]

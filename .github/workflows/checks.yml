@@ -14,3 +14,28 @@ jobs:
       - run: pnpm install --ignore-scripts --config.strictDepBuilds=false
       - run: pnpm run check
       - run: pnpm test
+  package:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Publish the plugin package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Published release $tag already exists; leaving it unchanged."
+            exit 0
+          fi
+          mkdir -p dist
+          npm pack --ignore-scripts --pack-destination dist
+          sha256sum dist/*.tgz > dist/SHA256SUMS.txt
+          gh release create "$tag" dist/*.tgz dist/SHA256SUMS.txt --target "$GITHUB_SHA" --title "NInfer plugin $version" --notes "The plugin downloads the pinned official NInfer runtime on activation. See README for model and checkpoint support."
