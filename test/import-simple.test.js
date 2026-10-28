@@ -21,6 +21,17 @@ test('recursive import reads native context, components, and missing shards',asy
  await writeFile(join(nested,'part-2.ninferpart'),'part');result=await scan();assert.equal(result.models[0].complete,true);
 });
 
+test('scan output stays intact beyond the normal log limit and fails clearly when too large',async()=>{
+ const script="process.stdout.write(JSON.stringify({value:'x'.repeat(2100000)}))";
+ const output=await run(process.execPath,['-e',script],{stdoutLimit:3*1024*1024});
+ assert.equal(JSON.parse(output.stdout).value.length,2100000);
+ await assert.rejects(()=>run(process.execPath,['-e',script],{stdoutLimit:100000}),/Choose a smaller model folder/);
+});
+
+test('scanning the filesystem root asks for a model folder',async()=>{
+ await assert.rejects(()=>run('python3',['-B',new URL('../scripts/scan-models.py',import.meta.url).pathname,'/']),/Choose a model folder/);
+});
+
 test('missing runtime is installed on activation and can be retried',async t=>{
  const root=await mkdtemp(join(tmpdir(),'ninfer-auto-'));t.after(()=>rm(root,{recursive:true,force:true}));
  const runtime=new Runtime('ninfer',{dataDir:root});await runtime.init();let calls=0;
