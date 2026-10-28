@@ -32,7 +32,7 @@ jobs:
           curl -fsSLo /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
           sudo dpkg -i /tmp/cuda-keyring.deb
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cuda-nvcc-13-1 cuda-cudart-dev-13-1 libcublas-dev-13-1 cmake ninja-build pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libcurl4-openssl-dev python3-jinja2 zlib1g-dev
+          sudo apt-get install -y --no-install-recommends cuda-nvcc-13-1 cuda-nvtx-13-1 cuda-cccl-13-1 cuda-driver-dev-13-1 cuda-cudart-dev-13-1 libcublas-dev-13-1 cmake ninja-build pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libcurl4-openssl-dev python3-jinja2 zlib1g-dev
       - name: Build and package the pinned custom engine
         if: steps.release.outputs.exists != 'true'
         run: python3 scripts/package-custom-engine.py --work "$RUNNER_TEMP/ninfer-custom" --output dist-runtime --jobs 2
