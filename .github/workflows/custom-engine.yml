@@ -1,0 +1,47 @@
+name: custom-engine
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/custom-engine.yml
+      - scripts/package-custom-engine.py
+      - patches/ninfer-nvfp4-kv.patch
+      - lib/engine.json
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check pinned runtime release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(python3 -c 'import json; print(json.load(open("lib/engine.json"))["customRuntimeRelease"])')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install CUDA build tools
+        if: steps.release.outputs.exists != 'true'
+        run: |
+          curl -fsSLo /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i /tmp/cuda-keyring.deb
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cuda-nvcc-13-1 cuda-cudart-dev-13-1 libcublas-dev-13-1 cmake ninja-build pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libcurl4-openssl-dev python3-jinja2 zlib1g-dev
+      - name: Build and package the pinned custom engine
+        if: steps.release.outputs.exists != 'true'
+        run: python3 scripts/package-custom-engine.py --work "$RUNNER_TEMP/ninfer-custom" --output dist-runtime --jobs 2
+      - name: Publish runtime and checksums
+        if: steps.release.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          cd dist-runtime
+          sha256sum *.tar.gz.* runtime-manifest.json > SHA256SUMS.txt
+          gh release create "$RUNTIME_TAG" ./* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Custom NInfer runtime' --notes 'Pinned NInfer source plus the repository NVFP4 Q5_1/Q6_0 patch. Linux x64, CUDA 13.1, SM75/80/86/89/120a. Private runtime libraries included; the system supplies glibc 2.39+ and the NVIDIA driver. Provenance, file checksums and license notices are included.'
