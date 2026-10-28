@@ -35,9 +35,10 @@ test('scanning the filesystem root asks for a model folder',async()=>{
 test('missing runtime is installed on activation and can be retried',async t=>{
  const root=await mkdtemp(join(tmpdir(),'ninfer-auto-'));t.after(()=>rm(root,{recursive:true,force:true}));
  const runtime=new Runtime('ninfer',{dataDir:root});await runtime.init();let calls=0;
- runtime.setup=async()=>{calls++;if(calls===1)throw Error('offline');await mkdir(join(root,'engine','bin'),{recursive:true});await writeFile(join(root,'engine','bin','ninfer-serve'),'ready');};
+ await mkdir(join(root,'engine','bin'),{recursive:true});await writeFile(join(root,'engine','bin','ninfer-serve'),'incomplete');
+ runtime.setup=async()=>{calls++;if(calls===1)throw Error('offline');const bin=join(root,'engine','bin');await mkdir(join(bin,'backends','cuda13'),{recursive:true});for(const file of ['ninfer-serve','ninfer-calibrate','backends/cuda13/libninfer-runtime.so'])await writeFile(join(bin,file),'ready');await writeFile(join(bin,'dsh-runtime.json'),JSON.stringify({official:true,sourceRevision:'3d882fc116941d9233c40bf30f4d66dbaa3d24bd',backend:'13'}));};
  const first=await runtime.ensureEngine();await runtime.jobs.get(first.id).promise;assert.equal(runtime.jobs.get(first.id).status,'failed');
- const second=await runtime.action('install-engine');await runtime.jobs.get(second.id).promise;assert.equal(runtime.jobs.get(second.id).status,'complete');assert.equal(await runtime.ensureEngine(),undefined);await runtime.dispose();
+ const second=await runtime.action('install-engine');await runtime.jobs.get(second.id).promise;assert.equal(runtime.jobs.get(second.id).status,'complete');runtime.jobs.get(second.id).status='failed';assert.equal(await runtime.ensureEngine(),undefined);assert.equal(runtime.jobs.get(second.id).status,'complete');await runtime.dispose();
 });
 
 test('purging NInfer cache preserves saved model profiles',async t=>{

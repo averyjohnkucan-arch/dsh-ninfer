@@ -23,3 +23,11 @@ The official NInfer release does not support saving session snapshots with DFlas
 ## Development
 
 `pnpm install --ignore-scripts`, `pnpm run check`, and `pnpm test`. The `patches/` and `scripts/build-checkpoint-engine.js` retain the older experimental custom build; automatic installation uses the official release and does not claim that patch's DFlash checkpoint support.
+
+## Portable model configs
+
+Use **Export config** beside a saved model, then **Download config JSON**. The export streams every artifact piece through MD5; large models take time and progress appears in Activity. The JSON includes context, KV format, speculation, vision and checkpoint settings, plus the exact byte size and MD5 of each required piece. Model weights are not included.
+
+Use **Import config**, select that JSON, and enter a model folder. The plugin searches its subfolders, checks exact size before MD5, and rebuilds the artifact’s relative shard layout using links. Renamed or relocated files can be matched. Original weights remain in place. Runtime executables, credentials and machine-specific GPU calibration are not imported; calibrate again on the destination GPU.
+
+Runtime downloads retry three times automatically. Bad checksums discard the damaged part before restarting it; interrupted transfers resume. A failed installation keeps a Retry button visible. Complete verified runtime folders are reused, and incomplete folders are preserved while a replacement is staged.

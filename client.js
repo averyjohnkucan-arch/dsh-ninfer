@@ -10,6 +10,13 @@ window.__ModuleLoader__.load({
    if(response.status===401||response.status===403)throw Error('Reopen DSH using its launch link, then reload this page.');
    const result=await response.json();if(!response.ok||result.error)throw Error(result.error||response.statusText);return result.result;
   }
+  function downloadConfig(config){
+   const url=URL.createObjectURL(new Blob([JSON.stringify(config,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download=config.name.replace(/[^a-zA-Z0-9._-]/g,'_')+'.dsh-model.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function ConfigImport({busy,run,done}){
+   const [config,setConfig]=useState(null),[path,setPath]=useState(''),[error,setError]=useState('');
+   return h('section',{'aria-label':'Import model config'},h('h4',null,'Import model config'),h('p',null,'Select an exported JSON config and a folder containing the model files. Subfolders are searched by exact size, then MD5; filenames may differ.'),h('label',null,'Model config JSON',h('input',{type:'file',accept:'.json,application/json',disabled:busy,onChange:async event=>{setError('');setConfig(null);try{const file=event.target.files[0];if(!file)return;if(file.size>2*1024*1024)throw Error('Model config exceeds 2 MiB');setConfig(JSON.parse(await file.text()));}catch(error){setError(error.message);}}})),config&&h('p',null,config.name+' · '+(config.files?.length||0)+' files to locate'),h('label',null,'Search folder',h('input',{value:path,placeholder:'/path/to/models',onChange:event=>setPath(event.target.value)})),error&&h('p',{role:'alert',className:'ninfer-error'},error),h('button',{type:'button',disabled:busy||!config||!path,onClick:async()=>{try{await run('import-config',{config,path});done();}catch(error){setError(error.message);}}},'Find files and import'));
+  }
   function Card() {
    const [data,setData]=useState(null),[view,setView]=useState('models'),[draft,setDraft]=useState(null),[listing,setListing]=useState(null),[path,setPath]=useState(''),[scan,setScan]=useState(null),[catalog,setCatalog]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
    const refresh=async()=>setData(await api('list'));
@@ -20,6 +27,7 @@ window.__ModuleLoader__.load({
    const edit=(key,value)=>setDraft(p=>({...p,[key]:value}));
    const option=(key,value)=>setDraft(p=>({...p,options:{...p.options,[key]:value}}));
    const active=data?.jobs.find(j=>j.status==='running'), latest=data?.jobs.at(-1);
+   const installation=data?.jobs.filter(j=>j.kind==='Install NInfer').at(-1);
    const modelBusy=active && active.kind!=='Install NInfer';
    async function browse(folder) {try{const next=await act('browse',{path:folder||undefined});setListing(next);setPath(next.path);}catch{}}
    async function scanFolder() {try{setScan(await act('scan',{path:listing.path}));}catch{}}
@@ -43,13 +51,15 @@ window.__ModuleLoader__.load({
    }
    const button=(label,fn,disabled=false)=>h('button',{type:'button',onClick:fn,disabled},label);
    return h('section',{className:'ninfer-card','aria-label':'NInfer'},h('style',null,css),
-    h('header',{className:'ninfer-head'},h('div',null,h('h3',null,'NInfer'),h('small',null,'Local models')),button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
+    h('header',{className:'ninfer-head'},h('div',null,h('h3',null,'NInfer 0.3.0'),h('small',null,'Local models')),button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
     error&&h('p',{role:'alert',className:'ninfer-error'},error),
+    installation?.status==='failed'&&h('div',{role:'alert'},h('p',{className:'ninfer-error'},'NInfer runtime installation failed. Retry resumes valid downloads and replaces damaged parts.'),button('Retry installation',()=>run('install-engine'),busy),button('View installation log',()=>setView('activity'))),
     !data?h('p',null,'Connecting to NInfer…'):null,
-    data&&view!=='editor'&&h('nav',{className:'ninfer-tabs','aria-label':'NInfer views'},...['models','files','download','activity'].map(id=>h('button',{key:id,type:'button','aria-current':view===id?'page':undefined,onClick:()=>setView(id)},id[0].toUpperCase()+id.slice(1))),button('Import files',async()=>{setView('files');await browse();},busy)),
+    data&&view!=='editor'&&h('nav',{className:'ninfer-tabs','aria-label':'NInfer views'},...['models','files','download','activity'].map(id=>h('button',{key:id,type:'button','aria-current':view===id?'page':undefined,onClick:()=>setView(id)},id[0].toUpperCase()+id.slice(1))),button('Import files',async()=>{setView('files');await browse();},busy),button('Import config',()=>setView('config'),busy)),
+    data&&view==='config'&&h(ConfigImport,{busy:busy||!!modelBusy,run:act,done:()=>setView('models')}),
     data&&view==='models'&&h('div',null,
      !data.profiles.length&&h('p',null,'Import a NInfer model to get started.'),
-     ...data.profiles.map(p=>h('div',{className:'ninfer-row',key:p.id},h('div',null,h('strong',null,p.name),h('p',null,`${p.status} · ${p.context.toLocaleString()} context`),p.cacheStatus?.phase==='warning'&&h('small',null,p.cacheStatus.message)),h('div',{className:'ninfer-actions'},button('Settings',()=>editProfile(p),busy||!!active),button(p.status==='running'?'Unload':'Load',()=>run(p.status==='running'?'stop':'prepareStart',{id:p.id}),busy||!!active),button('Remove',()=>{if(window.confirm('Remove this profile? Model files will be kept.'))run('remove',{id:p.id});},busy||!!active)))),
+     ...data.profiles.map(p=>h('div',{className:'ninfer-row',key:p.id},h('div',null,h('strong',null,p.name),h('p',null,`${p.status} · ${p.context.toLocaleString()} context`),p.cacheStatus?.phase==='warning'&&h('small',null,p.cacheStatus.message)),h('div',{className:'ninfer-actions'},button('Settings',()=>editProfile(p),busy||!!active),button(p.status==='running'?'Unload':'Load',()=>run(p.status==='running'?'stop':'prepareStart',{id:p.id}),busy||!!active),button('Export config',()=>run('export-config',{id:p.id}),busy||!!modelBusy),button('Remove',()=>{if(window.confirm('Remove this profile? Model files will be kept.'))run('remove',{id:p.id});},busy||!!active)))),
      h('p',null,'NInfer calibrates GPU kernels automatically when needed.')),
     data&&view==='files'&&h('div',null,
      h('p',null,'Choose a folder to scan its subfolders for NInfer models. Model files stay where they are.'),
@@ -63,8 +73,9 @@ window.__ModuleLoader__.load({
      !draft.nativeContext&&h('p',null,'Native context was not found; the engine default is selected.'),h('p',null,draft.components?.includes('vision')?'Vision is built into this artifact.':'No built-in vision component detected.'),h('p',null,draft.components?.includes('mtp')?(draft.options['--spec']==='mtp'?'Built-in MTP enabled (NInfer default draft width).':'Built-in MTP is available.'):'No built-in MTP detected.'),
      h('details',null,h('summary',null,'Advanced'),h('div',{className:'ninfer-grid'},h('label',null,'Port',h('input',{type:'number',value:draft.port,onChange:e=>edit('port',Number(e.target.value))})),h('label',null,'GPU index',h('input',{type:'number',value:draft.gpu,onChange:e=>edit('gpu',Number(e.target.value))}))),h('label',null,h('input',{type:'checkbox',checked:draft.kvCache===true,onChange:e=>edit('kvCache',e.target.checked)}),' Save conversation checkpoints (16 GiB per model)'),h('p',null,'DFlash and DFlash2 cannot save checkpoints in the official NInfer runtime; unsupported saves show a warning.'),h('p',null,'Engine: '+(draft.executable||'Automatically installed runtime'))),
      h('div',{className:'ninfer-actions'},button('Cancel',()=>{setDraft(null);setView('models');}),button('Save',()=>save(),busy||!!modelBusy),button('Save and calibrate',()=>save(true),busy||!!active)),h('small',null,'Calibrate runs NInfer’s GPU kernel calibration; resource settings remain automatic.')),
-    data&&view==='activity'&&h('div',null,...data.jobs.slice(-8).reverse().map(job=>h('div',{key:job.id,className:'ninfer-row'},h('div',null,h('strong',null,job.kind),h('p',{role:job.status==='failed'?'alert':'status'},job.progress),job.log&&h('details',null,h('summary',null,'View log'),h('pre',null,job.log))),job.status==='running'&&button('Cancel',()=>run('cancel',{id:job.id})),['failed','cancelled'].includes(job.status)&&job.kind==='Install NInfer'&&button('Retry installation',()=>run('install-engine'))))),
-    data&&view!=='activity'&&(active||latest?.status==='failed')&&h('div',{role:'status'},h('p',null,(active||latest).kind+': '+(active||latest).progress),h('button',{type:'button',onClick:()=>setView('activity')},'Activity'))
+    data&&view==='activity'&&h('div',null,...data.jobs.slice(-8).reverse().map(job=>h('div',{key:job.id,className:'ninfer-row'},h('div',null,h('strong',null,job.kind),h('p',{role:job.status==='failed'?'alert':'status'},job.progress),job.kind==='Export config'&&job.status==='complete'&&button('Download config JSON',()=>downloadConfig(job.result)),job.log&&h('details',null,h('summary',null,'View log'),h('pre',null,job.log))),job.status==='running'&&button('Cancel',()=>run('cancel',{id:job.id})),['failed','cancelled'].includes(job.status)&&job.kind==='Install NInfer'&&button('Retry installation',()=>run('install-engine'))))),
+    data&&view!=='activity'&&latest?.kind==='Export config'&&latest.status==='complete'&&button('Download config JSON',()=>downloadConfig(latest.result)),
+    data&&view!=='activity'&&(active||latest?.status==='failed')&&h('div',{role:'status'},h('p',null,(active||latest).kind+': '+(active||latest).progress),h('button',{type:'button',onClick:()=>setView('activity')},'Activity'),!active&&latest?.kind==='Install NInfer'&&button('Retry installation',()=>run('install-engine'),busy))
    );
   }
   return {inject:['slots'],apply(ctx){ctx.slots.inject('settings.models.footer',()=>ctx.slots.register({name:'settings.models.footer',id:'dsh-ninfer',order:20},Card));}};

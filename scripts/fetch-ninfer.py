@@ -1,6 +1,7 @@
 """Install a pinned official NInfer release with verified downloads."""
 import argparse
 import hashlib
+import http.client
 import io
 import json
 import os
@@ -11,7 +12,9 @@ import subprocess
 import tarfile
 import tempfile
 import urllib.request
+import urllib.error
 import sys
+import time
 
 REVISION = '3d882fc116941d9233c40bf30f4d66dbaa3d24bd'
 BASE = 'https://github.com/iamwavecut/ninfer-all/releases/download/2026-10-26.2/'
@@ -34,7 +37,23 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def download(url, path, expected_size, expected_hash):
+def download(url, path, expected_size, expected_hash, attempts=3):
+    """Resume interrupted transfers; a failed integrity check always retries from byte zero."""
+    for attempt in range(attempts):
+        try:
+            return download_once(url, path, expected_size, expected_hash)
+        except (OSError, ValueError, http.client.IncompleteRead) as error:
+            if isinstance(error, urllib.error.HTTPError):
+                if error.code == 416:
+                    path.unlink(missing_ok=True)
+                error.close()
+            if attempt + 1 == attempts:
+                raise
+            print(f'{path.name}: {error}; retrying ({attempt + 2}/{attempts})', flush=True)
+            time.sleep(min(2 ** attempt, 4))
+
+
+def download_once(url, path, expected_size, expected_hash):
     if path.exists() and path.stat().st_size == expected_size and sha256(path) == expected_hash:
         return
     offset = path.stat().st_size if path.exists() else 0
@@ -50,10 +69,14 @@ def download(url, path, expected_size, expected_hash):
             while block := response.read(4 * 1024 * 1024):
                 stream.write(block)
                 received += len(block)
+                if received > expected_size:
+                    stream.close()
+                    path.unlink()
+                    raise ValueError('Server sent more bytes than the verified release part contains')
                 print(f'{path.name}: {received // 1048576} / {expected_size // 1048576} MiB', flush=True)
     if path.stat().st_size != expected_size or sha256(path) != expected_hash:
         path.unlink()
-        raise ValueError(f'Checksum or size mismatch for {path.name}; retry installation')
+        raise ValueError(f'Checksum or size mismatch for {path.name}; discarded the damaged download')
 
 
 def extract_deb(path, destination):
@@ -121,8 +144,16 @@ def install(root):
     root = Path(root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     target = root / 'bin'
-    if target.exists():
-        raise ValueError('Runtime directory already exists; select a new engine directory to preserve it')
+    # An interrupted installation may leave a folder, but it is ready only with its receipt and tools.
+    try:
+        receipt = json.loads((target / 'dsh-runtime.json').read_text())
+        complete = receipt.get('sourceRevision') == REVISION and receipt.get('backend') == backend and all(
+            (target / name).is_file() for name in ('ninfer-serve', 'ninfer-calibrate', f'backends/cuda{backend}/libninfer-runtime.so'))
+    except (OSError, ValueError):
+        complete = False
+    if complete:
+        print('DSH_RESULT=' + json.dumps({'executable': str(target / 'ninfer-serve'), 'official': True, 'sourceRevision': REVISION}), flush=True)
+        return
     downloads = root / 'downloads'
     downloads.mkdir(exist_ok=True)
     paths = []
@@ -147,6 +178,10 @@ def install(root):
             raise ValueError('The verified release is missing its server, calibration tool, or backend')
         paths.extend(prepare_compat_libraries(package, backend, downloads))
         (package / 'dsh-runtime.json').write_text(json.dumps({'sourceRevision': REVISION, 'backend': backend, 'official': True}, indent=2))
+        if target.exists():
+            backup = root / ('bin-incomplete-' + str(time.time_ns()))
+            target.rename(backup)
+            print(f'Preserved the previous incomplete runtime at {backup}', flush=True)
         package.rename(target)
     for path in paths:
         path.unlink()
