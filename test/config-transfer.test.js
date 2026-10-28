@@ -75,3 +75,39 @@ test("config round trip relocates renamed NInfer headers and parts without copyi
     /advanced option/,
   );
 });
+
+test("recovered tuning controls and bundled conversation template survive export and import", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ninfer-recovered-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { cacheHistoryTemplate } = await import("../lib/cache-history.js");
+  const manifest = { components: { text: { config: { max_position_embeddings: 262144 } } }, files: [] };
+  const payload = Buffer.from(JSON.stringify(manifest)), header = Buffer.alloc(32);
+  header.write("NINFER\0\x03", 0, "binary");
+  header.writeBigUInt64LE(BigInt(payload.length), 8);
+  const main = join(root, "nvfp4.ninfer");
+  await writeFile(main, Buffer.concat([header, payload]));
+  const runtime = new Runtime("ninfer", { dataDir: join(root, "data") });
+  await runtime.init();
+  t.after(() => runtime.dispose());
+  const p = {
+    ...freshProfile("ninfer"), modelPath: main, context: 196608, cacheStableHistory: true,
+    maxTokens: 32768, samplingPresets: { thinking: { temperature: 1, top_p: 0.95 } },
+    options: { "--kv-dtype": "q5_1", "--vision-residency": "resident",
+      "--embedding-residency": "device", "--output-head-residency": "device",
+      "--host-cache-mib": "16384", "--structured-output": true,
+      "--full-draft-head": true, "--no-cuda-graph": true, "--device-state-slots": "0",
+      "--chat-template": cacheHistoryTemplate, "--preserve-thinking": true },
+  };
+  runtime.profiles = [p];
+  const config = await exportConfig(runtime, p.id);
+  assert.equal(config.settings.options["--chat-template"], undefined);
+  const result = await importConfig(runtime, config, root);
+  const restored = runtime.find(result.ids[0]);
+  assert.deepEqual(restored.options, p.options);
+  assert.deepEqual(restored.samplingPresets, p.samplingPresets);
+  assert.equal(restored.maxTokens, 32768);
+  assert.equal(restored.cacheStableHistory, true);
+  assert.match(restored.runtimeNotice, /custom NInfer/);
+  config.settings.options["--chat-template"] = "/arbitrary/template";
+  await assert.rejects(() => importConfig(runtime, config, root), /advanced option/);
+});
