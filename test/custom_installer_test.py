@@ -79,7 +79,9 @@ class CustomInstallerTests(unittest.TestCase):
             target = root / 'engine'
             (target / 'bin').mkdir(parents=True)
             (target / 'bin/old-runtime').write_text('preserve')
-            with patch.object(installer, 'check_platform'), patch.object(installer.DOWNLOAD.urllib.request, 'urlopen',
+            with patch.object(installer, 'check_platform'), \
+                    patch.object(installer.subprocess, 'check_output', return_value='12.0\n'), \
+                    patch.object(installer.DOWNLOAD.urllib.request, 'urlopen',
                     side_effect=lambda req, **_: io.BytesIO(parts[req.full_url.rsplit('/', 1)[-1]])):
                 with self.assertRaisesRegex(ValueError, 'provenance'):
                     installer.install(target, manifest)
