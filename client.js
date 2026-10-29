@@ -68,7 +68,7 @@ window.__ModuleLoader__.load({
    const speedRunning=active?.kind==='Test speed'&&active.profileId===draft?.id;
    const speedLabel=speedRunning?'Testing…':speed?`p${Math.round(speed.prefillTokS)}/d${Math.round(speed.decodeTokS)}`:'Test speed';
    return h('section',{className:'ninfer-card','aria-label':'NInfer'},h('style',null,css),
-    h('header',{className:'ninfer-head'},h('div',null,h('h3',null,'NInfer 0.4.2'),h('small',null,installation?.status==='running'?'Installing runtime…':data?.runtimeKind==='custom'?'Custom engine':data?.runtimeKind==='official'?'Official engine':'Local models')),button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
+    h('header',{className:'ninfer-head'},h('div',null,h('h3',null,'NInfer 0.4.3'),h('small',null,installation?.status==='running'?'Installing runtime…':data?.runtimeKind==='custom'?'Custom engine':data?.runtimeKind==='official'?'Official engine':'Local models',h('span',null,data?.sharedScheduler?' · Shared GPU scheduler':' · Independent GPU queue'))),button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
     error&&h('p',{role:'alert',className:'ninfer-error'},error),
     installation?.status==='failed'&&h('div',{role:'alert'},h('p',{className:'ninfer-error'},'NInfer runtime installation failed. Retry resumes valid downloads and replaces damaged parts.'),button('Retry installation',()=>run('install-engine'),busy),button('View installation log',()=>setView('activity'))),
     !data?h('p',null,'Connecting to NInfer…'):null,

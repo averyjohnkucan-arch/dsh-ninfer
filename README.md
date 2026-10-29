@@ -47,3 +47,7 @@ Rename a saved model under **Settings → Model name → Save**. The name is use
 In model Settings, **Test speed** sits beside **Save and calibrate**. It saves pending edits, then measures exactly 2,048 uncached prompt tokens and 512 generated tokens using the selected model, context, KV format and speculative-decoding settings. The button becomes, for example, **p144/d67**: prefill and decode tokens per second. Click it again to repeat the test.
 
 Rates come from NInfer's native timings and are saved per profile. Changing execution settings or recalibrating clears the previous measurement; renaming keeps it. Cancel through Activity. Failed, cached or incomplete tests preserve the last valid result. A short raw-text benchmark is not a prediction of full-context chat speed or model quality; generation ignores EOS solely to complete the fixed 512-token workload. No engine changes are required.
+
+## Shared GPU handoff
+
+Install [dsh-model-scheduler](https://github.com/averyjohnkucan-arch/dsh-model-scheduler) alongside NInfer and restart DSH. The optional service queues chat, manual loads, speed tests and GPU calibration on the selected GPU. Chat retains admission through checkpoint saving. Strata 0.6.4+ and Dory use the same interface. The card shows **Shared GPU scheduler** when attached, otherwise **Independent GPU queue**. Without the scheduler, unload other providers' models yourself before loading on the same GPU. No hard dependency is added.

@@ -296,3 +296,21 @@ test("speed metadata preserves checkpoint compatibility", async (t) => {
   p.speedTest = { prefillTokS: 144, decodeTokS: 67 };
   assert.equal(await runtime.cache.identity(p), before);
 });
+
+test("speed test takes GPU admission before the checkpoint gate, matching chat lock order", async (t) => {
+  const { runtime, p } = await fixture(t),
+    events = [];
+  const acquire = runtime.acquire.bind(runtime),
+    gate = runtime.cache.gate.acquire.bind(runtime.cache.gate);
+  runtime.acquire = async (...args) => {
+    events.push("GPU");
+    return acquire(...args);
+  };
+  runtime.cache.gate.acquire = async (...args) => {
+    events.push("checkpoint gate");
+    return gate(...args);
+  };
+  const job = await benchmark(runtime, p.id);
+  assert.equal(job.status, "complete", job.error);
+  assert.deepEqual(events, ["GPU", "checkpoint gate"]);
+});

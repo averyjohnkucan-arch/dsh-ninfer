@@ -14,7 +14,7 @@ export async function apply(ctx, config) {
  // Optional scheduler service. Each engine remains usable on its own.
  ctx.inject(['modelScheduler'],scope=>{
   const scheduler=scope.get('modelScheduler');
-  scope.effect(()=>{runtime.scheduler=scheduler;const unregister=scheduler.registerProvider(id,()=>runtime.profiles.map(p=>runtime.driver(p)));return async()=>{unregister();try{await Promise.all(runtime.profiles.map(p=>scheduler.unload(id+':'+p.id,{force:true})));}finally{if(runtime.scheduler===scheduler)runtime.scheduler=null;}};});
+  scope.effect(()=>{runtime.scheduler=scheduler;runtime.onChange();const unregister=scheduler.registerProvider(id,()=>runtime.profiles.map(p=>runtime.driver(p)));return async()=>{unregister();try{await Promise.all(runtime.profiles.map(p=>scheduler.unload(id+':'+p.id,{force:true})));}finally{if(runtime.scheduler===scheduler)runtime.scheduler=null;runtime.onChange();}};});
  });
  ctx.effect(()=>{const owned=ctx.llm.registerAdapter([id],new LocalAdapter(ctx,runtime,title));registration=owned;return()=>{if(registration===owned)registration=undefined;owned();};});
  ctx.effect(()=>ctx.connection.fetch.register({path:actionPath,methods:['POST'],requestBody:'buffered',fetch:handler(runtime)}));
