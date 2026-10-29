@@ -26,3 +26,9 @@ The GitHub runtime-verification workflow checks the exact published manifest, pa
 - NInfer: pinned OCI manifest and presence of expected runtime layer verified against the registry.
 
 Not performed: new full-model inference, new GPU tuning, repeated calibration, clean-machine compiler/runtime installation on every platform, or numerical parity after quantization. Existing saved tunes were imported as requested. Supported platform and format limits are in README.md.
+
+## 0.4.2 — compact speed button
+
+The per-model button beside Save and calibrate runs one uncached raw completion with exactly 2,048 tokenizer-produced input IDs and 512 output tokens. A native NVFP4-full / NVFP4-KV / DFlash2 K7 test at a configured 262,144 context completed twice, with both prompt and generation counts checked and no cached prompt tokens. The second sample measured approximately p2886/d106; this is a short raw-text workload, not a chat or populated-256K benchmark. The loaded process was reused after measurement metadata was saved. Results and engine logs are retained in the task's work directory. Production DSH profiles were not changed.
+
+Automated coverage includes fixed workload/API headers, EOS masking, cache rejection, native errors, cancellation and resource release, external-server/active-answer refusal, result persistence and settings invalidation, unchanged server/checkpoint identities, and the rendered button/save-before-test behavior. The full suite passes 78 JavaScript and 11 Python tests.

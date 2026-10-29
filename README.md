@@ -41,3 +41,9 @@ Recovered configs preserve placement, host cache, graph, draft, output-limit and
 Changing Context keeps an explicit KV capacity in sync when it tracked the old context or would be too small for the new context. Automatic capacity and larger custom pools are preserved. Re-saving an older profile repairs a capacity below its selected context without changing KV precision. Startup failures show the engine's diagnostic instead of its usage manual.
 
 Rename a saved model under **Settings → Model name → Save**. The name is used in the model list and DSH model picker; its file paths, native model ID and tuning settings are preserved.
+
+## Quick speed test
+
+In model Settings, **Test speed** sits beside **Save and calibrate**. It saves pending edits, then measures exactly 2,048 uncached prompt tokens and 512 generated tokens using the selected model, context, KV format and speculative-decoding settings. The button becomes, for example, **p144/d67**: prefill and decode tokens per second. Click it again to repeat the test.
+
+Rates come from NInfer's native timings and are saved per profile. Changing execution settings or recalibrating clears the previous measurement; renaming keeps it. Cancel through Activity. Failed, cached or incomplete tests preserve the last valid result. A short raw-text benchmark is not a prediction of full-context chat speed or model quality; generation ignores EOS solely to complete the fixed 512-token workload. No engine changes are required.
