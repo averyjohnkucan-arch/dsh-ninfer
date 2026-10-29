@@ -2,35 +2,26 @@ name: verify-custom-runtime
 on:
   push:
     branches: [main]
-    paths: [.github/workflows/verify-custom-runtime.yml]
+    paths:
+      - .github/workflows/verify-custom-runtime.yml
+      - scripts/custom-runtime.json
+      - lib/engine.json
   workflow_dispatch:
 permissions:
-  contents: write
-  actions: write
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      RUNTIME_TAG: engine-5ed86dff9fe3-362d65f69966-blackwell-r1
-      MANIFEST_SHA256: 611eb2fd7fe285cac8f662d9e7deb07c0437cba7bfb39bbf3764c80a24015e4a
     steps:
       - uses: actions/checkout@v4
-      - name: Wait for the verified draft assets and download them
+      - name: Download the pinned runtime
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 - <<'PYCODE'
-          import json,os,subprocess,time
-          expected={'ninfer-custom-linux-x64-blackwell.tar.gz.001': 1567469892, 'runtime-manifest.json': 52042}
-          for attempt in range(80):
-              assets=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/releases/427186233/assets'],text=True))
-              complete={a['name']:a['size'] for a in assets if a['state']=='uploaded'}
-              if all(complete.get(name)==size for name,size in expected.items()):break
-              time.sleep(15)
-          else:raise SystemExit('The draft runtime upload has not completed')
-          PYCODE
-          gh release download "$RUNTIME_TAG" --repo "$GITHUB_REPOSITORY" --dir runtime-download
+          tag=$(python3 -c 'import json; print(json.load(open("scripts/custom-runtime.json"))["release"])')
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir runtime-download
+          cmp scripts/custom-runtime.json runtime-download/runtime-manifest.json
       - name: Install the test-only CUDA driver stub
         run: |
           curl -fsSLo /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
@@ -47,7 +38,7 @@ jobs:
               with path.open('rb') as stream:
                   while block:=stream.read(4*1024*1024):h.update(block)
               return h.hexdigest()
-          assert digest(root/'runtime-manifest.json')==os.environ['MANIFEST_SHA256']
+          assert (root/'runtime-manifest.json').read_bytes()==pathlib.Path('scripts/custom-runtime.json').read_bytes()
           manifest=json.loads((root/'runtime-manifest.json').read_text())
           engine=json.loads(pathlib.Path('lib/engine.json').read_text())
           for key,expected in [('sourceRevision',engine['revision']),('sourceTree',engine['sourceTree']),('patchSha256',engine['patchSha256'])]:
@@ -76,15 +67,3 @@ jobs:
               subprocess.run([str(package/'ninfer-calibrate'),'--help'],env=env,check=True)
           print('Archive SHA256, source provenance, all private libraries and both launchers passed on Ubuntu 24.04.')
           PYCODE
-      - name: Publish the verified runtime
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$RUNTIME_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
-      - name: Stop the superseded broad architecture build
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          state=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/40747223752" --jq .status)
-          if [ "$state" != completed ]; then
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs/40747223752/cancel" --method POST || true
-          fi

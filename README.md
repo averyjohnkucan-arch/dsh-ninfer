@@ -4,9 +4,13 @@ A local NInfer model provider for DeepSeek Harness. Import a folder to find `.ni
 
 ## Install
 
-Requires DSH 0.2.1-rc.2, Node 22.19+, Python 3, Linux x86-64 and a supported NVIDIA GPU. In **Plugins → Add plugin**, paste `https://github.com/averyjohnkucan-arch/dsh-ninfer` and enable it. On first activation the plugin downloads the official NInfer release, verifies each part against pinned SHA-256 hashes, and installs it in the plugin data directory. The download is approximately 3.7 GiB. Progress, cancellation and retry appear in **Settings → Models → NInfer → Activity**. Models are separate.
+Requires DSH 0.2.1-rc.2, Node 22.19+, Python 3.12+, Linux x86-64 and a compatible NVIDIA driver. In **Plugins → Add plugin**, paste `https://github.com/averyjohnkucan-arch/dsh-ninfer` and enable it.
 
-The automatic package is upstream release `2026-10-26.2`, source revision `3d882fc116941d9233c40bf30f4d66dbaa3d24bd`. It includes CUDA runtime libraries. A compatible NVIDIA driver and the release's system library dependencies are required. If needed, the installer downloads pinned, checksum-verified Debian multimedia libraries into the plugin's private runtime, without installing system packages. The plugin selects the CUDA 13 Blackwell release on compute capability 12.0 and CUDA 12 for supported older GPUs. It reports unsupported platforms rather than installing a mismatched package.
+On consumer Blackwell GPUs (SM120), first activation downloads the **custom engine from this repository's GitHub release**, verifies every archive part and runtime file with SHA-256, and selects it automatically. The package contains the matching server and calibration tool, CUDA and multimedia libraries, and a matching private glibc loader. No compiler, CUDA toolkit, old model folders or Desktop launcher is needed. The host supplies the NVIDIA driver. The runtime download is approximately 1.5 GiB; model weights are separate.
+
+This custom runtime uses upstream revision `5ed86dff9fe3a5a0776f40a7aea86cf381da990d` plus the checksum-pinned NVFP4 patch in this repository. It includes Q5_1/Q6_0 KV storage and embedding/output-head residency controls used by the recovered NVFP4 profiles. Other previously supported NVIDIA GPUs retain the pinned official NInfer release; custom-only KV controls are not advertised for that fallback.
+
+Progress, cancellation and retry appear in **Settings → Models → NInfer → Activity**. Existing runtimes are preserved while a verified replacement is staged. Native GPU calibration defaults to the plugin's own data directory. Models are imported separately and stay where they are.
 
 ## Models and tuning
 
@@ -18,11 +22,11 @@ NInfer automatically chooses resource settings and calibrates GPU kernels on fir
 
 **Advanced → Save conversation checkpoints** enables native disk snapshots for compatible models; it defaults on for imported Qwen3.5-family artifacts. The plugin keeps up to 16 GiB per model, evicting least recently used snapshots first. The top-level **Purge all cache** button unloads plugin-managed models and clears NInfer checkpoints while preserving profiles and weights.
 
-The official NInfer release does not support saving session snapshots with DFlash/DFlash2. Such saves report a warning and fall back to normal prefill. Snapshot support and numerical behavior depend on the model and engine. Checkpoints contain conversation state and live under `~/.dsh/dsh-ninfer/kv` (or `$DSH_HOME/dsh-ninfer/kv`).
+Snapshot support and numerical behavior depend on the model and engine. Unsupported saves report a warning and fall back to normal prefill; the plugin does not report an unsuccessful save as a cache hit. Checkpoints contain conversation state and live under `~/.dsh/dsh-ninfer/kv` (or `$DSH_HOME/dsh-ninfer/kv`).
 
 ## Development
 
-`pnpm install --ignore-scripts`, `pnpm run check`, and `pnpm test`. The `patches/` and `scripts/build-checkpoint-engine.js` retain the older experimental custom build; automatic installation uses the official release and does not claim that patch's DFlash checkpoint support.
+`pnpm install --ignore-scripts`, `pnpm run check`, and `pnpm test`. `scripts/package-custom-engine.py` and the `custom-engine` workflow build the pinned source, verify the patched tree, and publish the relocatable runtime with checksums, source provenance and license notices. `scripts/build-checkpoint-engine.js` is the optional local build path. Automatic installation downloads the published custom binary; it does not compile on the user's computer.
 
 ## Portable model configs
 
@@ -32,4 +36,4 @@ Use **Import config**, select that JSON, and enter a model folder. The plugin se
 
 Runtime downloads retry three times automatically. Bad checksums discard the damaged part before restarting it; interrupted transfers resume. A failed installation keeps a Retry button visible. Complete verified runtime folders are reused, and incomplete folders are preserved while a replacement is staged.
 
-Recovered configs preserve placement, host cache, graph, draft, output-limit and sampling settings. Cache-stable history uses the bundled template; imported JSON cannot choose a template path or executable. Q5_1/Q6_0 KV profiles require a compatible custom engine, shown as a warning after import. Select its executable in Advanced settings; the official runtime is not a substitute for that custom build.
+Recovered configs preserve placement, host cache, graph, draft, output-limit and sampling settings. Cache-stable history uses the bundled template; imported JSON cannot choose a template path or executable. On Blackwell, the automatically installed custom engine supports recovered Q5_1/Q6_0 KV profiles; no executable selection is required. Advanced settings retain an optional executable override for other compatible builds.

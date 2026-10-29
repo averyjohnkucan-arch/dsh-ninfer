@@ -17,5 +17,8 @@
     "qualification": "Five focused GPU tests and historical native262K forward passed; current allGPU throughput/quality/live acceptance pending."
   },
   "sourceTree": "334f06883b30f177b0a952fe9377cb0451d0f59e",
-  "customRuntimeRelease": "engine-5ed86dff9fe3-362d65f69966-r1"
+  "customRuntimeRelease": "engine-5ed86dff9fe3-362d65f69966-blackwell-r1",
+  "customRuntimeArchitectures": [
+    "120a"
+  ]
 }

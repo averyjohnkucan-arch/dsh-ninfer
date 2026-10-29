@@ -107,7 +107,7 @@ test("recovered tuning controls and bundled conversation template survive export
   assert.deepEqual(restored.samplingPresets, p.samplingPresets);
   assert.equal(restored.maxTokens, 32768);
   assert.equal(restored.cacheStableHistory, true);
-  assert.match(restored.runtimeNotice, /custom NInfer/);
+  assert.equal(restored.runtimeNotice, undefined);
   config.settings.options["--chat-template"] = "/arbitrary/template";
   await assert.rejects(() => importConfig(runtime, config, root), /advanced option/);
 });

@@ -44,4 +44,4 @@ jobs:
         run: |
           cd dist-runtime
           sha256sum *.tar.gz.* runtime-manifest.json > SHA256SUMS.txt
-          gh release create "$RUNTIME_TAG" ./* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Custom NInfer runtime' --notes 'Pinned NInfer source plus the repository NVFP4 Q5_1/Q6_0 patch. Linux x64, CUDA 13.1, SM75/80/86/89/120a. Private runtime libraries included; the system supplies glibc 2.39+ and the NVIDIA driver. Provenance, file checksums and license notices are included.'
+          gh release create "$RUNTIME_TAG" ./* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Custom NInfer runtime' --latest=false --notes 'Pinned NInfer source plus the repository NVFP4 Q5_1/Q6_0 patch. Architecture coverage and platform requirements are recorded in runtime-manifest.json. Private runtime libraries, file checksums, source provenance and license notices are included.'

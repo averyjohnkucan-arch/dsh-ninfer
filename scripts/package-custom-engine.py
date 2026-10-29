@@ -12,7 +12,7 @@ import tarfile
 PACKAGE = Path(__file__).resolve().parents[1]
 ARCHITECTURES = ['75', '80', '86', '89', '120a']
 # The host supplies glibc and the NVIDIA driver. Everything else is private to this runtime.
-HOST_LIBRARIES = re.compile(r'^(?:ld-linux|lib(?:c|m|pthread|dl|rt|resolv|util)\.so|libcuda\.|libnvidia-)')
+HOST_LIBRARIES = re.compile(r'^(?:ld-linux|lib(?:c|m|mvec|pthread|dl|rt|resolv|util|anl|nss_[a-z0-9_]+)\.so|libcuda\.|libnvidia-)')
 
 
 def run(*args, cwd=None, env=None):
@@ -57,12 +57,18 @@ def copy_libraries(binary, destination, licenses):
             raise ValueError('Unresolved runtime dependency: ' + line)
         path = Path(match.group(1))
         shutil.copy2(path.resolve(), destination / name)
-        try:
-            owner = run('dpkg-query', '-S', str(path.resolve())).split(': ', 1)[0]
-            packages.add(owner)
-        except subprocess.CalledProcessError:
+        # usrmerge systems can record a library under /lib even when it resolves through /usr/lib.
+        candidates = dict.fromkeys([str(path), str(path.resolve()), str(path.resolve()).replace('/usr/lib/', '/lib/', 1)])
+        for candidate in candidates:
+            try:
+                owner = run('dpkg-query', '-S', candidate).split(': ', 1)[0]
+                packages.add(owner)
+                break
+            except subprocess.CalledProcessError:
+                continue
+        else:
             if not str(path).startswith(str(cuda)):
-                raise
+                raise ValueError('No package license provenance for ' + str(path))
     # cuBLAS loads this dependency internally, so ldd does not list it on every toolkit.
     for name in ('libcublasLt.so.13',):
         path = cuda / name
@@ -119,9 +125,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     source, build = work / 'source', work / 'build'
     prepare_source(source, engine)
+    architectures = engine.get('customRuntimeArchitectures', ARCHITECTURES)
     subprocess.run(['cmake', '-S', str(source), '-B', str(build), '-G', 'Ninja',
         '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.1/bin/nvcc',
-        '-DCMAKE_CUDA_ARCHITECTURES=' + ';'.join(ARCHITECTURES),
+        '-DCMAKE_CUDA_ARCHITECTURES=' + ';'.join(architectures),
         '-DNINFER_BUILD_APPS=ON', '-DNINFER_MULTICALL=ON', '-DBUILD_TESTING=OFF',
         '-DNINFER_BUILD_BENCHMARKS=OFF'], check=True)
     subprocess.run(['cmake', '--build', str(build), '--target', 'ninfer-multicall', '--parallel', args.jobs], check=True)
@@ -150,7 +157,7 @@ def main():
     metadata = {'format': 1, 'custom': True, 'release': engine['customRuntimeRelease'],
         'sourceRevision': engine['revision'], 'sourceTree': engine['sourceTree'],
         'patchSha256': engine['patchSha256'], 'platform': 'linux-x64',
-        'architectures': ARCHITECTURES, 'minimumGlibc': '2.39', 'cuda': '13.1',
+        'architectures': architectures, 'minimumGlibc': '2.39', 'cuda': '13.1',
         'capabilities': engine['capabilities'],
         'files': [{'name': str(p.relative_to(package)), 'size': p.stat().st_size, 'sha256': digest(p)}
                   for p in sorted(package.rglob('*')) if p.is_file() and not p.is_symlink()]}

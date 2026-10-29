@@ -1,13 +1,21 @@
 # Packaged NVFP4 and KV engine
 
-The plugin carries the exact engine patch in `patches/ninfer-nvfp4-kv.patch`, over the revision in `lib/engine.json`. The installer verifies the patch checksum and the complete resulting Git tree. The patch includes the checkpoint implementation, native NVFP4 DFlash2 routes, genuine Q5_1 and Q6_0 KV storage, and exact-byte vocabulary placement controls.
+On Linux x86-64 with a consumer Blackwell GPU (SM120), activation downloads the pinned custom runtime from this repository's GitHub releases. It includes the matching server, calibrator, private loader and runtime libraries. Installation verifies the archive parts and every runtime file against `scripts/custom-runtime.json` before replacing a previous installation. The host supplies the NVIDIA driver; a compiler and CUDA toolkit are not required.
 
-Engine setup creates a revision-and-patch-specific directory under the plugin-owned runtime root. It does not overwrite an older build or rewrite other profiles. CUDA architecture is detected from the first NVIDIA GPU, or selected explicitly with `--arch`; supported targets and required CUDA versions follow the engine documentation. CMake, Ninja, a compatible C++/CUDA toolchain, Git and NVIDIA drivers are installation prerequisites. Model weights are imported separately. There are no developer-machine model or executable paths in fresh presets.
+The engine is upstream revision `5ed86dff9fe3a5a0776f40a7aea86cf381da990d` plus `patches/ninfer-nvfp4-kv.patch`. Source revision, patched tree and patch SHA-256 are recorded in `lib/engine.json` and the runtime manifest. The patch includes persistent checkpoints, native NVFP4 DFlash2 routes, Q5_1/Q6_0 KV storage and embedding/output-head residency controls.
 
-For source-only installation validation without compiling or starting a GPU model:
+Other previously supported NVIDIA GPUs use the pinned official runtime. Its UI does not offer custom-only Q5_1/Q6_0 KV formats. An imported profile requiring them reports the incompatibility before loading. Advanced settings retain an executable override for compatible external builds.
+
+## Optional source build
+
+`scripts/package-custom-engine.py` builds and packages the pinned source for maintainers. The `custom-engine` GitHub workflow uses the architecture list in `lib/engine.json`. Building requires CMake, Ninja, Git and a compatible C++/CUDA toolchain. This is separate from normal plugin installation.
+
+To reconstruct and verify the source without compiling or starting a model:
 
 ```sh
 node scripts/build-checkpoint-engine.js --root /path/to/isolated/runtime --prepare-only
 ```
 
-Normal setup performs the CUDA build and reports the resulting source and executable paths to the owning profile. Packaged source reconstruction is verified. Five focused GPU tests passed on the isolated implementation, and earlier native 262K forward tests used host vocabulary. These results do **not** establish current all-GPU fit, throughput, chat/tool/vision quality, or fresh-harness runtime acceptance. Those validations remain pending; do not treat installation as model qualification.
+## Validation limits
+
+The packaged runtime passed clean local installation, verified reuse and imports of both recovered profiles. Huihui IQ3_S at 262,144 context with int8 KV and NVFP4-full at 196,608 context with Q5_1 KV each started and answered a short request using their saved DFlash2 settings. These checks establish startup and response compatibility, not new throughput results, full-context numerical parity, vision quality or qualification of other GPUs. Historical checkpoint tests are documented separately in `CHECKPOINT-VALIDATION.md`.

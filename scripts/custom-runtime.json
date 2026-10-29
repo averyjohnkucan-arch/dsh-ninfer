@@ -1,0 +1,1505 @@
+{
+  "format": 1,
+  "custom": true,
+  "release": "engine-5ed86dff9fe3-362d65f69966-blackwell-r1",
+  "sourceRevision": "5ed86dff9fe3a5a0776f40a7aea86cf381da990d",
+  "sourceTree": "334f06883b30f177b0a952fe9377cb0451d0f59e",
+  "patchSha256": "362d65f699666fc82ad52fc067bdb68e63aebc7648dff3d0ff94c57922c14104",
+  "platform": "linux-x64",
+  "architectures": [
+    "120a"
+  ],
+  "cuda": "13.1",
+  "loader": "bundled-glibc",
+  "bundledGlibc": "2.43",
+  "buildType": "verified-local-source-build",
+  "capabilities": {
+    "kvStorage": [
+      "q5_1",
+      "q6_0"
+    ],
+    "dflash2Nvfp4": true,
+    "qualification": "Five focused GPU tests and historical native262K forward passed; current allGPU throughput/quality/live acceptance pending."
+  },
+  "files": [
+    {
+      "name": "bundled-loader",
+      "size": 6,
+      "sha256": "11345a868e4501067929158e0ca5f91b83243cd65c85df92062b58cb7258b4bb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "size": 254864,
+      "sha256": "bda779ea9e9ad234f60315477d7cfd0bdde861cd8ddd9df8cdaf62f18c4cec14"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libOpenCL.so.1",
+      "size": 89848,
+      "sha256": "3a24c22deedc682eb864596ef301a75d54dea23ca4c35a50deda9480694137c2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libSvtAv1Enc.so.2",
+      "size": 8017584,
+      "sha256": "f4a938d9aa170d98afbede811524ba8d1b41042239589294e202a574cbf20528"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libX11-xcb.so.1",
+      "size": 14104,
+      "sha256": "6a9047ac83e4e1afb8032e62332aa449e7c6307c731f621054c9c0573a460899"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libX11.so.6",
+      "size": 1318648,
+      "sha256": "badd43566333da97d916ab365c61227751d49cd5c0df5d49dabdbd67b8c6fd19"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libXau.so.6",
+      "size": 18776,
+      "sha256": "2b742de65acd00f154ed156720af66c0c0af9a58360ba041f25a41e2f775fab5"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libXdmcp.so.6",
+      "size": 26856,
+      "sha256": "24beecbb0faf600d1a646b5edfc8c144da6f2965cb427598f4e17edc1285a733"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libXext.so.6",
+      "size": 77592,
+      "sha256": "9e358938dc783704b75a8a27f07b9a2cc7dfb7ff73fd05cbcfe634b8c2afc74a"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libXfixes.so.3",
+      "size": 26880,
+      "sha256": "04f371370ab65d552b214c9d57ac8b05c8fd9127b1bd55e29bd297f417241de0"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libXrender.so.1",
+      "size": 43712,
+      "sha256": "708d1c6a5d8aa5169d61e5b79973bf012047de0fb881d2836d44b3167a1a51a5"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libaom.so.3",
+      "size": 5529928,
+      "sha256": "92d8b38ea0b9d0c545ce1653e371bc21f11e804dac3727f095785cccab05b9eb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libatomic.so.1",
+      "size": 35120,
+      "sha256": "eac440708f874c4d446671efb5353cebeaa829bd1f18cd8d5065cd6efefa387b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libavcodec.so.62",
+      "size": 28258856,
+      "sha256": "f2f7634772627cd3180700f2c7bfb81377d6367042136a576fea9230c45a0beb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libavformat.so.62",
+      "size": 3176672,
+      "sha256": "727804ca2781f4d2c7a12ab01b3180b7f071e535718c713241b073e58db96868"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libavutil.so.60",
+      "size": 1235136,
+      "sha256": "56557dd89c99afd4c7c1f62297fc0f4c19ed97e29bd903937fac480d38fbe3a5"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libblkid.so.1",
+      "size": 240696,
+      "sha256": "c6c40ef148122df950ba53c4e44f7b45860da2381bf59fa8d4a645e7bfa55cb8"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libbluray.so.3",
+      "size": 285752,
+      "sha256": "396aeb0837ab654383f78677051372979fe584a5f3426d8324c662983a0553bb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1",
+      "size": 141712,
+      "sha256": "7f3acc17bffda6f12f7b022e9386514cfd83e77de67e71218bcbf19ec3577a99"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libbrotlidec.so.1",
+      "size": 55688,
+      "sha256": "470ed7f6b9053163b65b83efebc53bb98ca0d7a5a30ead2b545a4e5574da9c91"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libbrotlienc.so.1",
+      "size": 686936,
+      "sha256": "cc91392bf885be8bf1beecba292988686c7171f5f29ec5fece7bd92299f30365"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libbsd.so.0",
+      "size": 81048,
+      "sha256": "c71b8a0d7e94c5e34f6c328c5dd1ba7f325d3300c97a54a7c69ef9a6c2caa8b3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libbz2.so.1.0",
+      "size": 83120,
+      "sha256": "7138aeb748f73c150b1d34d67de69139a441910cd7b269076ba3c8b986dea9a7"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libc.so.6",
+      "size": 2190608,
+      "sha256": "85e64f97e348786a8fb4d9f3d52fec289e2fb86bba20f0731dfe61990525e0f7"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcairo-gobject.so.2",
+      "size": 43000,
+      "sha256": "3a7ae8610a5608a7d416e02eb5ea1c7f17b127729baf2b7bc0fbb7175662b081"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcairo.so.2",
+      "size": 1366968,
+      "sha256": "f8ed09b8ed35a1c19be81434bf7cb0fde1c1a0355b8ac74b7d3cf97788bdffe6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libchromaprint.so.1",
+      "size": 68192,
+      "sha256": "91852be92eb98554b9d39f1875d410c2743941de98de05d6bd52fad5ff379717"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcjson.so.1",
+      "size": 35080,
+      "sha256": "47eb4b2dd59fcfe5839255dff2877a1852503a40d1c7c3806463be5ff8bcc19f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcodec2.so.1.2",
+      "size": 16883384,
+      "sha256": "b45be32055f1263ca9158e5c4901ac7d3ea3f3bb463bd3b2917cc43ecfeae22d"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcom_err.so.2",
+      "size": 18584,
+      "sha256": "6fb3115b11fe7e14c26f3e086c4dc1fb41061130869a66c976e0ea69fdb912d6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcrypto.so.3",
+      "size": 6386528,
+      "sha256": "5385f0436ac2e284ba8c5fb1488874057c29c04be72dea32add832694f381e28"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcublas.so.13",
+      "size": 54190264,
+      "sha256": "f88d93a46abe3f03805c310b4d820d17398a90067080dd54acfd3a21d1415799"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcublasLt.so.13",
+      "size": 502605048,
+      "sha256": "a171fffeac32be8ff86b2492ba89e0fb666ecb1b3f656596fcc969b8886274be"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcudart.so.13",
+      "size": 757536,
+      "sha256": "9955aa41ec390676be408b6c615f3d94f067f64cb756ef3cdf2b656ac2a81900"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libcurl.so.4",
+      "size": 1000048,
+      "sha256": "346d21bb3015ba756e00f06ca1efe9bc6843531828e958c40a5e89d81160deb8"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libdatrie.so.1",
+      "size": 30872,
+      "sha256": "4f82932cdedfe2cfa2e306fddb71c770249cc45375176b850ac3e25f2cc9c7e2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libdav1d.so.7",
+      "size": 1775696,
+      "sha256": "2a010803950349d783cac5e1ced297e38fce12ed799149dd210b475933c69c4f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libdl.so.2",
+      "size": 14408,
+      "sha256": "59d725ca30596a9863f4fa2552a7125f834842abc86b40890231c129358965d2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libdrm.so.2",
+      "size": 92848,
+      "sha256": "c8be7d3863453898666977c12b0b392014a1c728d84215d885d574882d6e7b89"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libdvdnav.so.4",
+      "size": 92232,
+      "sha256": "589331edb16993fcda37501907d93144c17c8f4009d5676d326d78a6c270f7b3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libdvdread.so.8",
+      "size": 149576,
+      "sha256": "0ce539aed83f81ea84d6007196fcb31d90564e23e9067046d9ecf9cf7fb417fc"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libexpat.so.1",
+      "size": 186704,
+      "sha256": "2e5f66e2784c2746775567ff9916f6e7503182a8f1f2deb8ca729dfc1463849f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libffi.so.8",
+      "size": 64184,
+      "sha256": "1a0dc86f787f73e025a6e521056360afcbe70f2a82cd808132fefc2b4ee95daa"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libfontconfig.so.1",
+      "size": 338080,
+      "sha256": "cabcdfea3d61540e8aa7f93a29642da1d1e35c8f5fd13549f4b8ee2ee0ab28f0"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libfreetype.so.6",
+      "size": 870552,
+      "sha256": "36be278a8138d3e5773eb3f8491ff3fe73122a3051a9b36d1f86457ce0fad22d"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libfribidi.so.0",
+      "size": 121112,
+      "sha256": "c122a34c3e9cab264c9a07b21b75f16443a646cc8db4e84ac91e800daa7e03ce"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgcc_s.so.1",
+      "size": 187120,
+      "sha256": "9d339ecb409578d6a5d587e6c537a8f9589b8a13fefba30d167433a4b5758bee"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgdk_pixbuf-2.0.so.0",
+      "size": 216304,
+      "sha256": "cff4a3872f06723a646be0e086d0e3b385a50bc3d27fac5ebfb83875b03c2c3a"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0",
+      "size": 1941032,
+      "sha256": "015bde05a0741bbc56b5af15f87eac3eb6e25767c69d8a499686a533b69a35d4"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0",
+      "size": 1404616,
+      "sha256": "3cc1aeae827f436a296ec488b80e6c45c150dccfb4525e7db275cc08772d322f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libglycin-2.so.0",
+      "size": 4142392,
+      "sha256": "5916cfcc0101ddf1863f6a5cc4c224662ea0614dc756d57ca860ef445b1dcfc2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgme.so.0",
+      "size": 330224,
+      "sha256": "1bd5a58ea762650628769b2ea850b2eea7a1e839fc4a7c92167399943dd9e3a6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgmodule-2.0.so.0",
+      "size": 22816,
+      "sha256": "aa2f41237a20b7b28e99ef9706d2b0bad3097e313f51272cfd14dadff8b195cb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgmp.so.10",
+      "size": 543168,
+      "sha256": "fda9699eef15deda5f1c626e9140377a7f5d88c41516a54278ac02429cb20fa5"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgnutls.so.30",
+      "size": 2148528,
+      "sha256": "ebcc6a4dfae904dc956feb61cef5c36917cf36c19c5718d3c2be7e377ac65d27"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0",
+      "size": 403928,
+      "sha256": "8137127af8315f304e7099591a37a5a922801aaa39e10dc03daaf3c725066975"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgomp.so.1",
+      "size": 385208,
+      "sha256": "645478cbe100d1465b9d45f7047bca3965358f4d399937e544f55ac7a924d5a3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgraphite2.so.3",
+      "size": 149856,
+      "sha256": "3f1376e8965733a4d31386d5de99c829b7704beba3b07987da9220d53f192da2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgsm.so.1",
+      "size": 63728,
+      "sha256": "a109b49518ac37b504ab9fbfc2de2b0cc59114d10854f01044f2a35c7a1ace5f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2",
+      "size": 355160,
+      "sha256": "18e2ba0b2f421b780e7265337e52996f382857df63d0f9e63f391a75a14cdbe7"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libharfbuzz.so.0",
+      "size": 1220816,
+      "sha256": "b330ca2b82b22fbce5e1a15dabfeffdd97e9976c3a3e48a2696628bfd34526d5"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libhogweed.so.6",
+      "size": 301280,
+      "sha256": "67bdc12f1ffe643142d5e185a6a8f654fd38cd14e77bae68201cf9aa71b00b61"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libhwy.so.1",
+      "size": 55696,
+      "sha256": "5c0606edcfa98ed9a9ae251074b0154a39c2f4ada88f0a677e78ad19583f1486"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libidn2.so.0",
+      "size": 133272,
+      "sha256": "cdb48484c43a795c3722e286c31eb6238b4b7c3780043895dd9fa6b6041f78da"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libjxl.so.0.11",
+      "size": 4049120,
+      "sha256": "f6d96ce21d5d4b1ccac292ed3b5f92ce8fa77703d626edfc81ec1243c486b495"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libjxl_cms.so.0.11",
+      "size": 96632,
+      "sha256": "066577157ef78a8d1c3b045a0a5dc2148c0683a163115bb8f4e086edb91a7a9a"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libjxl_threads.so.0.11",
+      "size": 18816,
+      "sha256": "029817aa29d252f3865aa86e3ca21b4f3146658d0f090e09c59e44dfa101349e"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libk5crypto.so.3",
+      "size": 178728,
+      "sha256": "ee77156da39841edfaa7c5fcdca4cf98ae34d60323095617b484188a4d9965e3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libkeyutils.so.1",
+      "size": 22680,
+      "sha256": "c0c8f8d5adec4abe76fa462d8ad7c010f50c61e2b67b9feaa6f44e462c12cf41"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libkrb5.so.3",
+      "size": 831744,
+      "sha256": "aca607790a4349c5053390fa22b24e717b2c5ea101d7b468ece6507140c6ff7b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libkrb5support.so.0",
+      "size": 52080,
+      "sha256": "8cc61cecc016710e7134c1621b5a6537c55eea91d2a074f6f05fa6f6e36ec8d6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/liblber.so.2",
+      "size": 64064,
+      "sha256": "e2f9e23d75b37be7bdcdc39d2f74e2355a68f2ccd86e7f6534969ad8b359834b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/liblcms2.so.2",
+      "size": 419056,
+      "sha256": "046e89ccd894994728028a8f00c2424b79cff4e3d9832530f964edddf1078d1b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libldap.so.2",
+      "size": 392952,
+      "sha256": "0aa894b6d72690723015f6056bb6730a1cca41a2fac8224ef38cd7880c8e7860"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/liblzma.so.5",
+      "size": 215448,
+      "sha256": "515749273a91ca5e3b273b4025dc2c1f8827f90005baea0ab85ffb594e74f72f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libm.so.6",
+      "size": 1198376,
+      "sha256": "1c488db6f4fe8cecb72456bc018de000b7a9b539c2994864b0416b5e8371b3d8"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libmbedcrypto.so.16",
+      "size": 592320,
+      "sha256": "811e07a0b295829a748ee5d307c2bb375ea7cd9f237cf8306f364983f29b20e3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libmd.so.0",
+      "size": 55608,
+      "sha256": "f115fa619f586e47ddfbec21bfd50069fbe5d21f388f8d9a07a984cb075d7efa"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libmount.so.1",
+      "size": 338728,
+      "sha256": "ada01a744a6b665fae43097f3b93400aa74b20d6b59e2d51b9dd28c8747cccbb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libmp3lame.so.0",
+      "size": 247960,
+      "sha256": "e0676e6702b0095212724f2d298685d189dc3b54845c90cb1db1bd2970c29ed2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libmpg123.so.0",
+      "size": 388712,
+      "sha256": "97c50f2bc117d0edd3721d7886809a76e92a96c9572b84549d4c34fea4fe11e0"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libmvec.so.1",
+      "size": 1022240,
+      "sha256": "2f2e7f4ad88e1b13f2f8345c826b25f85ba61c93527d91e59dd0d2943eac6e80"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libnettle.so.8",
+      "size": 354640,
+      "sha256": "68c2f760d329a85ce1aa5cfc5e48ffece235258159005726798ad14e6f96a789"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libnghttp2.so.14",
+      "size": 166336,
+      "sha256": "2655558fee787cb4724ad59c72ce75b20847efc92a1c52fc202aea1d812c9b20"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libnorm.so.1",
+      "size": 379128,
+      "sha256": "0291e63eefed9eb16bc91ee0faeb01876c2b73a920327af1a9f6e0aaf3e7872a"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libnuma.so.1",
+      "size": 52328,
+      "sha256": "658ab7f42c68efdced0d9d05cfdb860c5145b121df886f332ab5425164e0db38"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libogg.so.0",
+      "size": 38984,
+      "sha256": "cb4b444d7f473530c04e31a70347bd572abd5e53a8b28e0f653fe76cf2255bc8"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libopenjp2.so.7",
+      "size": 456856,
+      "sha256": "267df1e339d524b501ef4b3567b8ab7ba9eb0bfdfe26adbaff149b54aaf03259"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libopenmpt.so.0",
+      "size": 1812920,
+      "sha256": "e9f76dbb9c1416d7d87201c45717103d3089fb6426c75157665e41a5a7b42650"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libopus.so.0",
+      "size": 4282792,
+      "sha256": "5f01eaf11e7326d83f9c341a1d943851a0b00e3444668697dd663c14b138476e"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libp11-kit.so.0",
+      "size": 1937960,
+      "sha256": "2611eeb039dbed48839d90afe3d9ad3e5bd9edca2989af05dc62a93c3ff41fed"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpango-1.0.so.0",
+      "size": 458600,
+      "sha256": "5c2d126df8d1e1beb793bf400c9bed6a3384e95b16d54cea85643bad046973f3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpangocairo-1.0.so.0",
+      "size": 67792,
+      "sha256": "c159cd8c2f4b85893bd8a0a5247c0c65cd12b4b8d0a74a5ee36aa844fb7850fb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpangoft2-1.0.so.0",
+      "size": 129184,
+      "sha256": "e80bafce7e827bc43dd5d519a6332786943ee167dddb698cdcbef15387c97dc2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0",
+      "size": 699056,
+      "sha256": "4a6b6b2078685b074869d75cb068664d7da6b3036df7bca0442b1bbbd4ac7e65"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpgm-5.3.so.0",
+      "size": 289760,
+      "sha256": "7f3d86409d99880c436246f6b0d8cb8e489f132198dba4ce713f7204c12de82e"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpixman-1.so.0",
+      "size": 747768,
+      "sha256": "8740b21b15423da495da1c89e83d0fb64ca871bd4da47341d0422d7afb3b25e3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpng16.so.16",
+      "size": 231648,
+      "sha256": "2a570998f08a406b4083b06888e528fa0c5d6cc3bef77b40026d661c91cbfb90"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpsl.so.5",
+      "size": 84040,
+      "sha256": "18d125c725a498d66f971ceb60bfc7cf660f6a0149b54e5caa3f4651c3d2b3c6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libpthread.so.0",
+      "size": 14408,
+      "sha256": "1327fc40710691dbd94e88b6cf4efce27fefe8fbb93f7d1164a75b4dccaea696"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/librabbitmq.so.4",
+      "size": 92312,
+      "sha256": "e611180266c7ad589293e0b59d8d665deb567538c98458bc1969f70d17374bbb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/librav1e.so.0.8",
+      "size": 3330672,
+      "sha256": "0ef5c4fe4226208726026ecd3b52c72587da758e9af75e02fdc897d3763258bc"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libresolv.so.2",
+      "size": 68104,
+      "sha256": "6b99ecf94bcb81732ed1e81615084a5cfe7383eb89ce83106fa51077409ce609"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/librist.so.4",
+      "size": 170248,
+      "sha256": "54ceda75a057b49a60ee169855b838e346af89a0d15f03ad367c4efa9a5c37f6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/librsvg-2.so.2",
+      "size": 5645592,
+      "sha256": "bf76e24f36f6e2edaffd108236d5a1ddf3e7d457999389b26dea8178124e6a07"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/librt.so.1",
+      "size": 14624,
+      "sha256": "9f3cc59207bcaaac74aaf7aca961f4816f0f4d945e4bd1c3cb98ec516becf161"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/librtmp.so.1",
+      "size": 126024,
+      "sha256": "fceac319eac32ab0d6e9d6d641f0abf2f4aa097aa1a1355ea9e7419e81d45b62"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libsasl2.so.2",
+      "size": 105352,
+      "sha256": "25163eb0a23ffe7d4170f9e219886dfdb831bbb1031a2cfac2227284a7f51e02"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libseccomp.so.2",
+      "size": 186888,
+      "sha256": "df995d80c824876afc38528b5e71d258e1844eb524cd9d34f9a7898562fd99e7"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libselinux.so.1",
+      "size": 199120,
+      "sha256": "7538ee77765a27966563c0d22437a3080dcdb346ff76cc16d71a3ce3379a716a"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libsharpyuv.so.0",
+      "size": 26888,
+      "sha256": "fced0bf76ec62fcce9b2cea1a91a9c61fbf6828e9e66b194cc6d779798907ff2"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libshine.so.3",
+      "size": 43320,
+      "sha256": "a97be4a266b1c227360e34be93da5857b047ea77ab1ab0697fa04a612b90f1c3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libsnappy.so.1",
+      "size": 47448,
+      "sha256": "7096393769ed4f8dce61c48559ff516e31e381c04ebd8c5ce5aa53962ce1caf6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libsodium.so.23",
+      "size": 367408,
+      "sha256": "f9fdc530581d9c0978097c3838d12e33b12d7496106699c796635e97a0407421"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libsoxr.so.0",
+      "size": 203984,
+      "sha256": "b58125b279394eaeeae0f83580218d7b807aabf06262a92eda3f5271c8d60124"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libspeex.so.1",
+      "size": 129176,
+      "sha256": "b33ab83259722f77ab70905816a96bd71987fbb1f0920bf238a27b77b5efe1f8"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libsrt-gnutls.so.1.5",
+      "size": 842792,
+      "sha256": "30af7a9de19c8644f76fcb3f8c0b269bc48b98271deaca497cfdc6ff4ed099b6"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libssh.so.4",
+      "size": 511560,
+      "sha256": "8ae94cd73cf654c2cc9bafe7c7cb8abefd084e8484e04bc6f3a8a8db4ae315fe"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libssh2.so.1",
+      "size": 314096,
+      "sha256": "34287a1e8942e6fdf1c154e8c615a8dab7a69dc6a4e8d76913afb323fdc6fd6f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "size": 1114280,
+      "sha256": "63b47f444efa588e291e9b650a5ba2ab02f856356f2d50f13a2e477db9119e09"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libstdc++.so.6",
+      "size": 2735712,
+      "sha256": "5bb0d21308f123b6ad46c6f35b42cedfcb8d6d439a53aa3dae04d880aaffdde3"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libswresample.so.6",
+      "size": 182424,
+      "sha256": "2d7816cb7ab4785d17bb34a9bdead9e1f0dfe5b8c64f2aa999a395d3e5c60f40"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libswscale.so.9",
+      "size": 1312920,
+      "sha256": "89facd7d55f3e9839bc2ad35ca26511438062f7640d5b5372ab7e42fbaa023cf"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libtasn1.so.6",
+      "size": 92384,
+      "sha256": "1255353abfae7b9f52aedb0264876cd4c852f13c2acf3e2203ebd2aab79bce02"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libthai.so.0",
+      "size": 44304,
+      "sha256": "dedacba149b8f955a4f37eb5793fad3128adcbfb4796da963e4a4a640f96e670"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libtheoradec.so.2",
+      "size": 104672,
+      "sha256": "58e951561d86f99bb31948f4e0940f75968e1da22fef9d11f80c017ba9462a15"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libtheoraenc.so.2",
+      "size": 211168,
+      "sha256": "5a06e5df441bd7ecfa1198d9f29df98388deb7759450541e7cc01a29b64ec30f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libtwolame.so.0",
+      "size": 133272,
+      "sha256": "06711b2aa649b344bc55d75abb85434be556c186ce47527fd87ec98cdcfae6da"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libudfread.so.3",
+      "size": 39064,
+      "sha256": "a7fef12100eafc0779ac343e569c4b6002c33e9ce3bc4648144af7343c9e689e"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libunistring.so.5",
+      "size": 1988864,
+      "sha256": "c762a289c02f716a12549d544a811715126067b9a6377057671d3fad9453a1fc"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libva-drm.so.2",
+      "size": 14488,
+      "sha256": "c08daf7ae0bb66e575f8e717906490481caa3bfa20fdc8e63e98fec3b090ebeb"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libva-x11.so.2",
+      "size": 26896,
+      "sha256": "8390231e0db104d6c9c52f7f8b9d34002559d6868c6f2d77e06cbad1442df2fa"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libva.so.2",
+      "size": 227560,
+      "sha256": "4a6b851f244e5d3c0ca08ba6861106050f3caaa631721e3f87d621caeec34065"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libvdpau.so.1",
+      "size": 18672,
+      "sha256": "cae9e0febd72ccd4e916369718be24feb9a00d1c9729f33a616c01687662a5ae"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libvorbis.so.0",
+      "size": 186520,
+      "sha256": "518db59c055b4754e6c07ac81e86ed30ef5dfc0c10a1d2a3cbb19eb120fe3ec5"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libvorbisenc.so.2",
+      "size": 694488,
+      "sha256": "66a7009084fa7eef7a21321fd5462b9e7dd355bcfcf35ddcc39852a65e600501"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libvorbisfile.so.3",
+      "size": 38984,
+      "sha256": "08f99c21b1533c850030e7f01beefccec27f8f87e011e809259bbc24324b7131"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libvpl.so.2",
+      "size": 401112,
+      "sha256": "d50e163f0b5c3152fbbb207fbd3503a64978df62e4583442bf9dba766965083d"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libvpx.so.12",
+      "size": 3897496,
+      "sha256": "9903e780cdb6d369e2a84e1ba872739c9713f11b30da936840b13760a6f0ec26"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libwebp.so.7",
+      "size": 592520,
+      "sha256": "0b477702bb43d90a1205813a9c211faa8dfef025a258b9d60663b37311b87c08"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libwebpmux.so.3",
+      "size": 55696,
+      "sha256": "73bf84036a6e1c50971a159484ae8f194b4f5109348e680e3b01d5141f83478b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libx264.so.165",
+      "size": 1912544,
+      "sha256": "5331dc304a788428ab86c6f1130e8e61d23e65fb06c62fb7acf6ba2b3a540f8f"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libx265.so.215",
+      "size": 16880560,
+      "sha256": "3fa0e6c8eaf249f6d418822ff128d42ba3e99a538173501c3f0a77a5a914889b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libxcb-dri3.so.0",
+      "size": 22824,
+      "sha256": "d2f0488a28a351718192c01bba15f60556f514db555dfbce9a132dedd1401e98"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libxcb-render.so.0",
+      "size": 55608,
+      "sha256": "ee3c4a0893f4d944acbc83433234a97d94556e10c6a238e533f82b7a6bbe821b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libxcb-shm.so.0",
+      "size": 14632,
+      "sha256": "58fcb847e2009affbd7eeb1f6d39949f29ccc153f230e0b0d23de00d2b5c1353"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libxcb.so.1",
+      "size": 170680,
+      "sha256": "6af94be329e17e57f1cc0f5e4afb5bdfe669a5168accdc31b03274110b937b41"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libxml2.so.16",
+      "size": 1449112,
+      "sha256": "302dfa1295c6f917758243ef0f118f7144026b51a5f5cd1610fba849c968f73b"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libxvidcore.so.4",
+      "size": 666000,
+      "sha256": "8ba0e00b73a9a017ed899705e6b322e8d4377c6e21fa15e044507f5a7f34cbf0"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libz.so.1",
+      "size": 121272,
+      "sha256": "27fa6c6cb94fb5b099ead61758a300dbc392d1dbf307fff6c16a9b8e57fdc9de"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libzmq.so.5",
+      "size": 667752,
+      "sha256": "bf55a43f63a1ce519412922de844fc3e9b42000d2cdc87f6b30a1ff8e3293e7d"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libzstd.so.1",
+      "size": 796824,
+      "sha256": "060eeb79531d435306665fd78329d8a9dd579f95876c5960bb67937825362a80"
+    },
+    {
+      "name": "compat/usr/lib/x86_64-linux-gnu/libzvbi.so.0",
+      "size": 593856,
+      "sha256": "c4fffa630e7d7b560a63923c7b288ec3d65faf8d2f338aadbcc9369734406e60"
+    },
+    {
+      "name": "licenses/NInfer-Apache-2.0.txt",
+      "size": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "name": "licenses/SOURCE-NOTICE.txt",
+      "size": 388,
+      "sha256": "03f2a18be3b0dd3a3042d9d42976959c5463155e9663e9abc72aa9314a68ddb7"
+    },
+    {
+      "name": "licenses/custom-engine.patch",
+      "size": 233959,
+      "sha256": "362d65f699666fc82ad52fc067bdb68e63aebc7648dff3d0ff94c57922c14104"
+    },
+    {
+      "name": "licenses/libaom3-amd64.txt",
+      "size": 12474,
+      "sha256": "42721127769a2518e2355d0634942a0c10d5c8b9b9c21218a93a3dc2087699c9"
+    },
+    {
+      "name": "licenses/libatomic1-amd64.txt",
+      "size": 73896,
+      "sha256": "d7815dd2364180835891947d96d808878204dea45b8597602a7952332195fbea"
+    },
+    {
+      "name": "licenses/libavcodec62-amd64.txt",
+      "size": 49188,
+      "sha256": "3a48e975751c49cc38db6f7254afba9f1065062b12cf65941c400f1009012cf3"
+    },
+    {
+      "name": "licenses/libavformat62-amd64.txt",
+      "size": 49188,
+      "sha256": "3a48e975751c49cc38db6f7254afba9f1065062b12cf65941c400f1009012cf3"
+    },
+    {
+      "name": "licenses/libavutil60-amd64.txt",
+      "size": 49188,
+      "sha256": "3a48e975751c49cc38db6f7254afba9f1065062b12cf65941c400f1009012cf3"
+    },
+    {
+      "name": "licenses/libblkid1-amd64.txt",
+      "size": 29703,
+      "sha256": "35a014187eb5d264405a91bda9ec782afdef9df148b657e67b38d07fabba2acf"
+    },
+    {
+      "name": "licenses/libbluray3-amd64.txt",
+      "size": 27090,
+      "sha256": "f3daaedc900d6de31d876c6f8f5a3458b58603091b8c69197fa40b5443989b78"
+    },
+    {
+      "name": "licenses/libbrotli1-amd64.txt",
+      "size": 1354,
+      "sha256": "24a64e5bb83d0960d1835696a1e23c0896ad6055b0ca47c66ab0eb9a766324b1"
+    },
+    {
+      "name": "licenses/libbsd0-amd64.txt",
+      "size": 22378,
+      "sha256": "47eaa031b1741a33a93e7cc8909bfe153acaec7ddff12e4dc7377d0e2ec10e91"
+    },
+    {
+      "name": "licenses/libbz2-1.0-amd64.txt",
+      "size": 2228,
+      "sha256": "832ed535ff3c3d025a8d2348eb1b697b89addcf2eaadbc17650262040b9145e2"
+    },
+    {
+      "name": "licenses/libc6-amd64.txt",
+      "size": 53241,
+      "sha256": "c31d10900fdb95d1889005145a2205bb75e3bc018d3ec8265b81364901748e09"
+    },
+    {
+      "name": "licenses/libcairo-gobject2-amd64.txt",
+      "size": 28461,
+      "sha256": "408fb9e704e875cd42d432e7c9b3b378f568e3c89db2b5c5ef3d11c025319574"
+    },
+    {
+      "name": "licenses/libcairo2-amd64.txt",
+      "size": 28461,
+      "sha256": "408fb9e704e875cd42d432e7c9b3b378f568e3c89db2b5c5ef3d11c025319574"
+    },
+    {
+      "name": "licenses/libchromaprint1-amd64.txt",
+      "size": 4012,
+      "sha256": "0f58bcde77c462f0833d92c3c1d67d79498e6a1b9789b1e1161909e10e61d0c7"
+    },
+    {
+      "name": "licenses/libcjson1-amd64.txt",
+      "size": 2379,
+      "sha256": "720c3c9cc0f8d29113ac4cc6de63c23118aaa9cc8e626b79401ccfd7ce905b1d"
+    },
+    {
+      "name": "licenses/libcodec2-1.2-amd64.txt",
+      "size": 5368,
+      "sha256": "fd07bd00dbf40eff6b292e2b6774cd2a01f3d839137c6a7622d6f088af220d97"
+    },
+    {
+      "name": "licenses/libcom-err2-amd64.txt",
+      "size": 20459,
+      "sha256": "2041b5febdc110151ca3372d01b16b85dda1888e33f3f60fce0f59940eed7d19"
+    },
+    {
+      "name": "licenses/libcurl4t64-amd64.txt",
+      "size": 20462,
+      "sha256": "b36986270d288caa9f7c44876802de7a491139f3903dcb6356707ece08e1df4a"
+    },
+    {
+      "name": "licenses/libdatrie1-amd64.txt",
+      "size": 1995,
+      "sha256": "7b181788688d7ba3336782c18f3919a462503024d3e23b15ff0f52b2de994efc"
+    },
+    {
+      "name": "licenses/libdav1d7-amd64.txt",
+      "size": 9722,
+      "sha256": "46762239c3e3d58f8c8219a80e5ec3f15bee23081414750e1762829c12fb5df8"
+    },
+    {
+      "name": "licenses/libdrm2-amd64.txt",
+      "size": 6415,
+      "sha256": "90df8ca02b0e0f21eebd8e58585345a8a5cd97bd46ad6faa577dc8d07a67aeaa"
+    },
+    {
+      "name": "licenses/libdvdnav4-amd64.txt",
+      "size": 2505,
+      "sha256": "e3fd6eed05e67c3c423109db3eebb71cd5e796b9452477c6f66f6e3cf596380a"
+    },
+    {
+      "name": "licenses/libdvdread8t64-amd64.txt",
+      "size": 5801,
+      "sha256": "afb374123ebbe902707de5a1a2004f7842728541686f8e92afd380ec48c4b8f3"
+    },
+    {
+      "name": "licenses/libexpat1-amd64.txt",
+      "size": 1756,
+      "sha256": "60919fe1a156395ff14511bb6ff79756c50ade2fff59ac60c9bae1d8a7fe6292"
+    },
+    {
+      "name": "licenses/libffi8-amd64.txt",
+      "size": 10164,
+      "sha256": "25ee86cfccc2b7eb9a156a127f1e1b38c46c231f516ff201912223eaf62ee186"
+    },
+    {
+      "name": "licenses/libfontconfig1-amd64.txt",
+      "size": 1301,
+      "sha256": "b215a61cdd3e62b5b17cc28b1852c78acb3dd38be0fb30706f7efc050dba91db"
+    },
+    {
+      "name": "licenses/libfreetype6-amd64.txt",
+      "size": 31151,
+      "sha256": "8951319d2cbc54c13f091eaedff603f717026e5bf7788902ccd635a094d7a561"
+    },
+    {
+      "name": "licenses/libfribidi0-amd64.txt",
+      "size": 1247,
+      "sha256": "200d598cca867f58739101cce4dba4bb6083f1489b37784daee7dea88bd441d2"
+    },
+    {
+      "name": "licenses/libgcc-s1-amd64.txt",
+      "size": 73896,
+      "sha256": "d7815dd2364180835891947d96d808878204dea45b8597602a7952332195fbea"
+    },
+    {
+      "name": "licenses/libgdk-pixbuf-2.0-0-amd64.txt",
+      "size": 4972,
+      "sha256": "faf01d9afa1bc904c146e149c987fd5b37e8b53a5a3b1cc2353a43adee0353a5"
+    },
+    {
+      "name": "licenses/libglib2.0-0t64-amd64.txt",
+      "size": 54884,
+      "sha256": "498035c1e93c9d12306f4ba8f37686c2a527657f8b17969ec6d11c1af87e543d"
+    },
+    {
+      "name": "licenses/libglycin-2-0-amd64.txt",
+      "size": 24030,
+      "sha256": "1e3a7afedd39f8b7a28bfed173680ee252635eb385e5a18b33cb334b60df8899"
+    },
+    {
+      "name": "licenses/libgme0-amd64.txt",
+      "size": 2615,
+      "sha256": "3149eacfe1713987e951be1985cd515dd4eac26e84f83a278d8d1cded72dfc42"
+    },
+    {
+      "name": "licenses/libgmp10-amd64.txt",
+      "size": 4153,
+      "sha256": "7d366aef5ba325150246de1d7820c4c9926cd27ca61a69948492b26cd3b61601"
+    },
+    {
+      "name": "licenses/libgnutls30t64-amd64.txt",
+      "size": 62050,
+      "sha256": "b32655aad8bb1530de36933f8702af1e669fabb9bf3e712c533803c7092d77da"
+    },
+    {
+      "name": "licenses/libgomp1-amd64.txt",
+      "size": 73896,
+      "sha256": "d7815dd2364180835891947d96d808878204dea45b8597602a7952332195fbea"
+    },
+    {
+      "name": "licenses/libgraphite2-3-amd64.txt",
+      "size": 9348,
+      "sha256": "a33017ba0308c41bdbde4751bff349ab7b26af45fadbb1e3e7ac67c372985572"
+    },
+    {
+      "name": "licenses/libgsm1-amd64.txt",
+      "size": 1964,
+      "sha256": "d8f1dc05f9f636c41deec7f75ca11daa595f36e41c79aadac1f3aa017c4e17b8"
+    },
+    {
+      "name": "licenses/libgssapi-krb5-2-amd64.txt",
+      "size": 63047,
+      "sha256": "936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816"
+    },
+    {
+      "name": "licenses/libharfbuzz0b-amd64.txt",
+      "size": 23329,
+      "sha256": "407e84e766824b0b8ee7e06da15dbf50e924f4adeec1e4748247a07b3dbc3208"
+    },
+    {
+      "name": "licenses/libhogweed6t64-amd64.txt",
+      "size": 24407,
+      "sha256": "344396197142cd506468b20029ea5722d507c980129bb3db4af02424ed6f39c6"
+    },
+    {
+      "name": "licenses/libhwy1t64-amd64.txt",
+      "size": 982,
+      "sha256": "fd82ff294401d62244717374587aa9daa62934600096460a8565d215ff902f8c"
+    },
+    {
+      "name": "licenses/libidn2-0-amd64.txt",
+      "size": 8500,
+      "sha256": "a63ceb8fab281177da9a27403f0be7ae69aa6f33bf6f63c455ecc587ca131268"
+    },
+    {
+      "name": "licenses/libjxl0.11-amd64.txt",
+      "size": 2662,
+      "sha256": "cf449aae49be7e62803ac2ee7f4bd63d1156c1ace680908d24a3856215cd3329"
+    },
+    {
+      "name": "licenses/libk5crypto3-amd64.txt",
+      "size": 63047,
+      "sha256": "936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816"
+    },
+    {
+      "name": "licenses/libkeyutils1-amd64.txt",
+      "size": 2148,
+      "sha256": "73f5682b0466f41cea2b9b7f1ff8a8052464f6c09fb29eeac4490512af09bd50"
+    },
+    {
+      "name": "licenses/libkrb5-3-amd64.txt",
+      "size": 63047,
+      "sha256": "936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816"
+    },
+    {
+      "name": "licenses/libkrb5support0-amd64.txt",
+      "size": 63047,
+      "sha256": "936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816"
+    },
+    {
+      "name": "licenses/liblcms2-2-amd64.txt",
+      "size": 5362,
+      "sha256": "420fd2c72204652c08a48548a0d1002edab3d9b180d3c416578c61f74092f460"
+    },
+    {
+      "name": "licenses/libldap2-amd64.txt",
+      "size": 62859,
+      "sha256": "2656a8ac4f2fda614be8fe6fd7f649665a6ca3abcf19f6ac125e2ff165b60939"
+    },
+    {
+      "name": "licenses/liblzma5-amd64.txt",
+      "size": 11559,
+      "sha256": "a9c3f6e1bf373b54e29704e31afd99f5405a32cbc7897608b0f15e9d544882d4"
+    },
+    {
+      "name": "licenses/libmbedcrypto16-amd64.txt",
+      "size": 2052,
+      "sha256": "446042a6d62055e5617c220129b03063deff1a2b595ac29d9d10a9058cc10981"
+    },
+    {
+      "name": "licenses/libmd0-amd64.txt",
+      "size": 8018,
+      "sha256": "4365ef6255ad553fce69dd4bc0e093472c5d0e41b8ea493a545cc926ce171aa6"
+    },
+    {
+      "name": "licenses/libmount1-amd64.txt",
+      "size": 29703,
+      "sha256": "35a014187eb5d264405a91bda9ec782afdef9df148b657e67b38d07fabba2acf"
+    },
+    {
+      "name": "licenses/libmp3lame0-amd64.txt",
+      "size": 7066,
+      "sha256": "0e4b0e56bb8e5b72a5d3af0629b617c9d78c2c8fb42a722f4b0a0d9bb3cac202"
+    },
+    {
+      "name": "licenses/libmpg123-0t64-amd64.txt",
+      "size": 1492,
+      "sha256": "96a8ad2037ec07953ee02ea7f9c56710e403d7d01be33500e9cd05d900998b7a"
+    },
+    {
+      "name": "licenses/libnettle8t64-amd64.txt",
+      "size": 24407,
+      "sha256": "344396197142cd506468b20029ea5722d507c980129bb3db4af02424ed6f39c6"
+    },
+    {
+      "name": "licenses/libnghttp2-14-amd64.txt",
+      "size": 5758,
+      "sha256": "a4d7f9d9d350e7f89aa0688cea74838f33147462d68a3542290387101bf4f274"
+    },
+    {
+      "name": "licenses/libnorm1t64-amd64.txt",
+      "size": 9569,
+      "sha256": "88c38443da2ea7d228b3d3e4e13138c02b41448e1210ad0e6277516c9ad493ef"
+    },
+    {
+      "name": "licenses/libnuma1-amd64.txt",
+      "size": 1357,
+      "sha256": "179c34f5e56cd0b6b73dd7970a97357ee784e2236e8293826656c7ebb3bface7"
+    },
+    {
+      "name": "licenses/libogg0-amd64.txt",
+      "size": 4213,
+      "sha256": "e2436f126bda43a69b367287d9b3db08efd128f9a9576240bc9bbe0c86b031c8"
+    },
+    {
+      "name": "licenses/libopenjp2-7-amd64.txt",
+      "size": 34936,
+      "sha256": "5e73ad1e015c45c2c82a1f1c25cf9737230270f28f995806d7ab82ebfbc3cc01"
+    },
+    {
+      "name": "licenses/libopenmpt0t64-amd64.txt",
+      "size": 11727,
+      "sha256": "5998a8ed3e0b53886019f9cdb54a2048ee3c26308db7fc692585c9721fb42e6b"
+    },
+    {
+      "name": "licenses/libopus0-amd64.txt",
+      "size": 10484,
+      "sha256": "1580efdb9c8b11bc06510021d948c89dfee78c7eb9bd6d1ac5eb3ebdcbd82d29"
+    },
+    {
+      "name": "licenses/libp11-kit0-amd64.txt",
+      "size": 15653,
+      "sha256": "a5611fbad151d1fa0aa484f6c393a5166af33ce9a9783dfb2712d6b87b462b37"
+    },
+    {
+      "name": "licenses/libpango-1.0-0-amd64.txt",
+      "size": 20017,
+      "sha256": "8d9dd932bc836ab2ea02e0b13c7cc1e9e5472a71008f0caa2a8793eb5780ee94"
+    },
+    {
+      "name": "licenses/libpangocairo-1.0-0-amd64.txt",
+      "size": 20017,
+      "sha256": "8d9dd932bc836ab2ea02e0b13c7cc1e9e5472a71008f0caa2a8793eb5780ee94"
+    },
+    {
+      "name": "licenses/libpangoft2-1.0-0-amd64.txt",
+      "size": 20017,
+      "sha256": "8d9dd932bc836ab2ea02e0b13c7cc1e9e5472a71008f0caa2a8793eb5780ee94"
+    },
+    {
+      "name": "licenses/libpcre2-8-0-amd64.txt",
+      "size": 6627,
+      "sha256": "e915cde4251f96ec6af107ecd2e194440a4e69440893b0c982802f8a1e4ae40a"
+    },
+    {
+      "name": "licenses/libpgm-5.3-0t64-amd64.txt",
+      "size": 4704,
+      "sha256": "07836d892d92dcef15583e4e01569805498b95769f1c85d79bc996821dace2cf"
+    },
+    {
+      "name": "licenses/libpixman-1-0-amd64.txt",
+      "size": 2051,
+      "sha256": "fc01aa986f587d001f58acd312a4168bcc5e9f9ab6caccf3213f25133b0ffef5"
+    },
+    {
+      "name": "licenses/libpng16-16t64-amd64.txt",
+      "size": 13276,
+      "sha256": "55c6fc6ffe83143f360b83f26b3064fff499120eff31e4f14ebba6d667308352"
+    },
+    {
+      "name": "licenses/libpsl5t64-amd64.txt",
+      "size": 3310,
+      "sha256": "bbafb0cf52d34465fc69f5ffd22d724224f6a2f28402c88b045c69d88af06aaf"
+    },
+    {
+      "name": "licenses/librabbitmq4-amd64.txt",
+      "size": 1602,
+      "sha256": "99f53e190f9ca2ec8a8cbd98f2ccd34f885e91e0e36bceacfa763582dfa2f8f7"
+    },
+    {
+      "name": "licenses/librav1e0.8-amd64.txt",
+      "size": 10346,
+      "sha256": "78924756e46ec5c762de1fd5ced1aa50aee171ac3608712b7481fe4e21a5fa62"
+    },
+    {
+      "name": "licenses/librist4-amd64.txt",
+      "size": 6900,
+      "sha256": "e67ffa708e79c29f03c5621e9feb89f4931c01ec5aaa361f11ac57bccfd476f2"
+    },
+    {
+      "name": "licenses/librsvg2-2-amd64.txt",
+      "size": 20160,
+      "sha256": "a2421c782398378c7099731878bc789b0517f7cd9eab24f971074c979d3e372f"
+    },
+    {
+      "name": "licenses/librtmp1-amd64.txt",
+      "size": 1921,
+      "sha256": "2aa6df2ec29edf3e26571e89bda27f0c3a3f187cdf08f75dcc6a7ce32d236824"
+    },
+    {
+      "name": "licenses/libsasl2-2-amd64.txt",
+      "size": 24643,
+      "sha256": "ddb128a81d3a140ef5b3574ae000a1a50d0cb9a2ec59917121a155f91b670166"
+    },
+    {
+      "name": "licenses/libseccomp2-amd64.txt",
+      "size": 1429,
+      "sha256": "6da0653a365b80ab31478dbfe9e7c358e80d58b6d2b52b4e16b4dbb42d7d9f5c"
+    },
+    {
+      "name": "licenses/libselinux1-amd64.txt",
+      "size": 1957,
+      "sha256": "864f1bb189f609075d580b8c4aada16d85a44546884f1687989e1cacc8c56751"
+    },
+    {
+      "name": "licenses/libsharpyuv0-amd64.txt",
+      "size": 6490,
+      "sha256": "725344c9200f6e6dad88d1ea88add2d673cdf1d8fbc3961bcd2693ab0c26d30d"
+    },
+    {
+      "name": "licenses/libshine3-amd64.txt",
+      "size": 2277,
+      "sha256": "b631215db51471d41765f415b55a76fabc553f4a33760c7740c9e31d33a4aba8"
+    },
+    {
+      "name": "licenses/libsnappy1v5-amd64.txt",
+      "size": 34490,
+      "sha256": "6e3b7206a2a68d959274c289922e06bd19788a3d48d3bf74e92db43ee21593e6"
+    },
+    {
+      "name": "licenses/libsodium23-amd64.txt",
+      "size": 7898,
+      "sha256": "10d3576a7a0af8afb5601f358c06eb8c24b02192bb71ed4fb9a328a0979ec74b"
+    },
+    {
+      "name": "licenses/libsoxr0-amd64.txt",
+      "size": 3239,
+      "sha256": "a56a0046bfa8ae9907f9847d50158dadee4ae4884db2f3841a3184f5f627a729"
+    },
+    {
+      "name": "licenses/libspeex1-amd64.txt",
+      "size": 4978,
+      "sha256": "9bd13b2ec0f10da92819d14c44cf6ddca15a191a23ee360e665fa1f68a53d984"
+    },
+    {
+      "name": "licenses/libsrt1.5-gnutls-amd64.txt",
+      "size": 23161,
+      "sha256": "f546213b63d33dc480d3cd8fef2ce03fdc1eb2e2803b534a22ff558a6f4f7096"
+    },
+    {
+      "name": "licenses/libssh-4-amd64.txt",
+      "size": 12992,
+      "sha256": "4cee4f0ea834fceb25e80a87cd685cdc2bab2d11d62ba0c1fe3fad24bfd0de9a"
+    },
+    {
+      "name": "licenses/libssh2-1t64-amd64.txt",
+      "size": 2975,
+      "sha256": "fb5d6b7a53710b6ba04e412a016d222a3e56b9d6e1a2572a8ffc2eae05e6acfb"
+    },
+    {
+      "name": "licenses/libssl3t64-amd64.txt",
+      "size": 2543,
+      "sha256": "6a7da622fe0637a334d2a8fc470852d2ffb77d9a2b2f930f854e32a41ad6ef35"
+    },
+    {
+      "name": "licenses/libstdc++6-amd64.txt",
+      "size": 73896,
+      "sha256": "d7815dd2364180835891947d96d808878204dea45b8597602a7952332195fbea"
+    },
+    {
+      "name": "licenses/libsvtav1enc2-amd64.txt",
+      "size": 14574,
+      "sha256": "66433ce51ad1f83c561940a0af5f78e45a1beee67e5cc5087c1f0c5d2736e1e4"
+    },
+    {
+      "name": "licenses/libswresample6-amd64.txt",
+      "size": 49188,
+      "sha256": "3a48e975751c49cc38db6f7254afba9f1065062b12cf65941c400f1009012cf3"
+    },
+    {
+      "name": "licenses/libswscale9-amd64.txt",
+      "size": 49188,
+      "sha256": "3a48e975751c49cc38db6f7254afba9f1065062b12cf65941c400f1009012cf3"
+    },
+    {
+      "name": "licenses/libtasn1-6-amd64.txt",
+      "size": 3359,
+      "sha256": "722a2780f3f3865c8bed997b8a6283eebf302c9fe4a5b2fb5fd221ea9a51a5a6"
+    },
+    {
+      "name": "licenses/libthai0-amd64.txt",
+      "size": 2204,
+      "sha256": "75e7ba208ce2a5fed45e4948ca46d3ae93e82415c728c47d78bc7c85e4fd0539"
+    },
+    {
+      "name": "licenses/libtheoradec2-amd64.txt",
+      "size": 5894,
+      "sha256": "24efe62ae5dc5bf337c4ec146576366a15abcf63695e2d7866d946e8a9f4b799"
+    },
+    {
+      "name": "licenses/libtheoraenc2-amd64.txt",
+      "size": 5894,
+      "sha256": "24efe62ae5dc5bf337c4ec146576366a15abcf63695e2d7866d946e8a9f4b799"
+    },
+    {
+      "name": "licenses/libtwolame0-amd64.txt",
+      "size": 1363,
+      "sha256": "147113a009ccf1c952c6903f248ac66581a3496aff7b5331fdec5e2c37f71f24"
+    },
+    {
+      "name": "licenses/libudfread3-amd64.txt",
+      "size": 2531,
+      "sha256": "7955da2d0f9acfc6ea12ebf25317e476cefff9ff7f5c970a25bbc3cb814533b6"
+    },
+    {
+      "name": "licenses/libunistring5-amd64.txt",
+      "size": 103761,
+      "sha256": "a585cd2cc2a5fcb8e58f12c7a710a35e06e5b897c59cd5ae4a7d835f0b49eae3"
+    },
+    {
+      "name": "licenses/libva-drm2-amd64.txt",
+      "size": 5571,
+      "sha256": "6a4cf1933ded064a147b8cdfd63028ce0bd9a2a699e19f040c092cdf97c9143b"
+    },
+    {
+      "name": "licenses/libva-x11-2-amd64.txt",
+      "size": 5571,
+      "sha256": "6a4cf1933ded064a147b8cdfd63028ce0bd9a2a699e19f040c092cdf97c9143b"
+    },
+    {
+      "name": "licenses/libva2-amd64.txt",
+      "size": 5571,
+      "sha256": "6a4cf1933ded064a147b8cdfd63028ce0bd9a2a699e19f040c092cdf97c9143b"
+    },
+    {
+      "name": "licenses/libvdpau1-amd64.txt",
+      "size": 3249,
+      "sha256": "95c50dc739326c6f8cdf1dd600ade987ba229c574858d3b225b16a9d859b32df"
+    },
+    {
+      "name": "licenses/libvorbis0a-amd64.txt",
+      "size": 2307,
+      "sha256": "47badad9f7f750f92cd12f44db08b6937e5b4d47935ba1cc60de0ea3a2adff9b"
+    },
+    {
+      "name": "licenses/libvorbisenc2-amd64.txt",
+      "size": 2307,
+      "sha256": "47badad9f7f750f92cd12f44db08b6937e5b4d47935ba1cc60de0ea3a2adff9b"
+    },
+    {
+      "name": "licenses/libvorbisfile3-amd64.txt",
+      "size": 2307,
+      "sha256": "47badad9f7f750f92cd12f44db08b6937e5b4d47935ba1cc60de0ea3a2adff9b"
+    },
+    {
+      "name": "licenses/libvpl2.txt",
+      "size": 3454,
+      "sha256": "81a668a0aef1bb4299dd552e97595d376bc0ca6cc32af14bc60bf893636f464f"
+    },
+    {
+      "name": "licenses/libvpx12-amd64.txt",
+      "size": 6242,
+      "sha256": "6e9e37e72e8e6b6fad3b53672b041f4ebee5c5d8db15048cbff9157fbb8deba5"
+    },
+    {
+      "name": "licenses/libwebp7-amd64.txt",
+      "size": 6490,
+      "sha256": "725344c9200f6e6dad88d1ea88add2d673cdf1d8fbc3961bcd2693ab0c26d30d"
+    },
+    {
+      "name": "licenses/libwebpmux3-amd64.txt",
+      "size": 6490,
+      "sha256": "725344c9200f6e6dad88d1ea88add2d673cdf1d8fbc3961bcd2693ab0c26d30d"
+    },
+    {
+      "name": "licenses/libx11-6-amd64.txt",
+      "size": 47102,
+      "sha256": "0b380a7fd5b2228f26e9585e56f14812efd3350f3df307507d2bc055dfd8de3e"
+    },
+    {
+      "name": "licenses/libx11-xcb1-amd64.txt",
+      "size": 47102,
+      "sha256": "0b380a7fd5b2228f26e9585e56f14812efd3350f3df307507d2bc055dfd8de3e"
+    },
+    {
+      "name": "licenses/libx264-165-amd64.txt",
+      "size": 7690,
+      "sha256": "44fcb4f83c021376610b073f6e42716ead9869f67c2120b33b7bb14bf1fc25fc"
+    },
+    {
+      "name": "licenses/libx265-215-amd64.txt",
+      "size": 4551,
+      "sha256": "ac2859168010138bce5a5a16a1c2442570ed236121352c34c1a710005b727eb5"
+    },
+    {
+      "name": "licenses/libxau6-amd64.txt",
+      "size": 1224,
+      "sha256": "118dd263a7b91c8f21c489f949bf13281dff9e766deea92b829dac4dce66601a"
+    },
+    {
+      "name": "licenses/libxcb-dri3-0-amd64.txt",
+      "size": 1781,
+      "sha256": "4f7cb9db6bf6542f5417e3d674c780d3a5fd12291a54d63054fb576ee0cfae80"
+    },
+    {
+      "name": "licenses/libxcb-render0-amd64.txt",
+      "size": 1781,
+      "sha256": "4f7cb9db6bf6542f5417e3d674c780d3a5fd12291a54d63054fb576ee0cfae80"
+    },
+    {
+      "name": "licenses/libxcb-shm0-amd64.txt",
+      "size": 1781,
+      "sha256": "4f7cb9db6bf6542f5417e3d674c780d3a5fd12291a54d63054fb576ee0cfae80"
+    },
+    {
+      "name": "licenses/libxcb1-amd64.txt",
+      "size": 1781,
+      "sha256": "4f7cb9db6bf6542f5417e3d674c780d3a5fd12291a54d63054fb576ee0cfae80"
+    },
+    {
+      "name": "licenses/libxdmcp6-amd64.txt",
+      "size": 1892,
+      "sha256": "aceaa93ea2bb08890d7f91987ecf6a03814309470c819c56fe79f7698e45ef53"
+    },
+    {
+      "name": "licenses/libxext6-amd64.txt",
+      "size": 10421,
+      "sha256": "bc57e445ca1d9fe082c8d54189dd411ff26caa8552c9c63d44ea06a982f32124"
+    },
+    {
+      "name": "licenses/libxfixes3-amd64.txt",
+      "size": 2320,
+      "sha256": "051ffe073ab38244c504bb379903b4ecda6081fb3d97d0d3dce44bc11712eef2"
+    },
+    {
+      "name": "licenses/libxml2-16-amd64.txt",
+      "size": 3067,
+      "sha256": "ee746b96cfa5be73c3ea3e4cfb1285e9b315d4c9267f99b2ee9c5d911d9fe3f4"
+    },
+    {
+      "name": "licenses/libxrender1-amd64.txt",
+      "size": 2252,
+      "sha256": "ed2a78123a5076b4f11da38cb1ffb85b5cb9fdc26b5746c517b1d7e7a9029704"
+    },
+    {
+      "name": "licenses/libxvidcore4-amd64.txt",
+      "size": 4686,
+      "sha256": "3407665dbf5828ba9adcab357fe16e931dd20fd4a51053fa9529226fb6ed2123"
+    },
+    {
+      "name": "licenses/libzmq5-amd64.txt",
+      "size": 3000,
+      "sha256": "78a1462a7c5ab0488ddacdde2fc1cdd10815f8139acac01dcab13f03dbef3a17"
+    },
+    {
+      "name": "licenses/libzstd1-amd64.txt",
+      "size": 5332,
+      "sha256": "2efe51c80ddc473bc2c91faec49dae645bf7f5a04824528fec816320432da2ae"
+    },
+    {
+      "name": "licenses/libzvbi0t64-amd64.txt",
+      "size": 11261,
+      "sha256": "e25dd401f7454b6d4b631e53e2f69d42d5bc132038c467d8d492da5952a2d6a5"
+    },
+    {
+      "name": "licenses/ocl-icd-libopencl1-amd64.txt",
+      "size": 2509,
+      "sha256": "69b388028066ab453fa7ad403530f7b8aafe753f9c0818653692438329d9aa07"
+    },
+    {
+      "name": "licenses/packages.tsv",
+      "size": 7376,
+      "sha256": "5a249dd441f9276343cac7cdf9907a736791e33e3fc345605a383c6fb8d23a2e"
+    },
+    {
+      "name": "licenses/zlib1g-amd64.txt",
+      "size": 2927,
+      "sha256": "9e5b96d63773a5d177ba264254390f792be07e41748ebd94730981c6cac31cc6"
+    },
+    {
+      "name": "ninfer-calibrate",
+      "size": 316,
+      "sha256": "1aeaa22f9c9c97cd850f4a87d84f14a336c46ec6ba00520c2d0d4dedd7724811"
+    },
+    {
+      "name": "ninfer-calibrate.bin",
+      "size": 605667544,
+      "sha256": "e05622c8f2effc256cf9fc6ed94cea31ee8b223aebe57c8f7783a9609cd2694b"
+    },
+    {
+      "name": "ninfer-serve",
+      "size": 312,
+      "sha256": "34a60f39d848213089a202af1f66f02b1a432db05dd4c96f474d382392e6edeb"
+    },
+    {
+      "name": "ninfer-serve.bin",
+      "size": 649558760,
+      "sha256": "e97e8a8831fef4820b0baed6cf7da5f773b8c91a7ddf46f56dc7b46b1a7f319a"
+    }
+  ],
+  "directory": "ninfer-custom-linux-x64-blackwell",
+  "archiveSha256": "04fad2d6f920bc2b87fd3450d85866d9f1ae0989573aca3a7452c0d4b29a10d1",
+  "parts": [
+    {
+      "name": "ninfer-custom-linux-x64-blackwell.tar.gz.001",
+      "size": 1567469892,
+      "sha256": "04fad2d6f920bc2b87fd3450d85866d9f1ae0989573aca3a7452c0d4b29a10d1"
+    }
+  ]
+}
