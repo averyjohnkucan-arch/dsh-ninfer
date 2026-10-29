@@ -24,7 +24,18 @@ window.__ModuleLoader__.load({
    useEffect(()=>{if(view!=='download')return;let live=true;const update=()=>api('recommended').then(x=>{if(live)setCatalog(x);}).catch(e=>{if(live)setError(e.message);});update();const timer=setInterval(update,2000);return()=>{live=false;clearInterval(timer);};},[view]);
    const act=async(action,payload={})=>{setBusy(true);setError('');try{const result=await api(action,payload);await refresh();return result;}catch(e){setError(e.message);throw e;}finally{setBusy(false);}};
    const run=(action,payload)=>act(action,payload).catch(()=>{});
-   const edit=(key,value)=>setDraft(p=>({...p,[key]:value}));
+   const edit=(key,value)=>setDraft(p=>{
+    const next={...p,[key]:value};
+    if(key==='context'){
+     const capacity=Number(p.options['--kv-capacity']);
+     // Explicit capacity follows the context it sized; preserve auto and larger custom pools.
+     if(capacity>0&&(capacity===p.context||capacity<value)){
+      next.options={...p.options,'--kv-capacity':value};
+      next.locks=[...new Set([...p.locks,'options.--kv-capacity'])];
+     }
+    }
+    return next;
+   });
    const option=(key,value)=>setDraft(p=>({...p,options:{...p.options,[key]:value}}));
    const active=data?.jobs.find(j=>j.status==='running'), latest=data?.jobs.at(-1);
    const installation=data?.jobs.filter(j=>j.kind==='Install NInfer').at(-1);
@@ -51,7 +62,7 @@ window.__ModuleLoader__.load({
    }
    const button=(label,fn,disabled=false)=>h('button',{type:'button',onClick:fn,disabled},label);
    return h('section',{className:'ninfer-card','aria-label':'NInfer'},h('style',null,css),
-    h('header',{className:'ninfer-head'},h('div',null,h('h3',null,'NInfer 0.4.0'),h('small',null,installation?.status==='running'?'Installing runtime…':data?.runtimeKind==='custom'?'Custom engine':data?.runtimeKind==='official'?'Official engine':'Local models')),button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
+    h('header',{className:'ninfer-head'},h('div',null,h('h3',null,'NInfer 0.4.1'),h('small',null,installation?.status==='running'?'Installing runtime…':data?.runtimeKind==='custom'?'Custom engine':data?.runtimeKind==='official'?'Official engine':'Local models')),button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
     error&&h('p',{role:'alert',className:'ninfer-error'},error),
     installation?.status==='failed'&&h('div',{role:'alert'},h('p',{className:'ninfer-error'},'NInfer runtime installation failed. Retry resumes valid downloads and replaces damaged parts.'),button('Retry installation',()=>run('install-engine'),busy),button('View installation log',()=>setView('activity'))),
     !data?h('p',null,'Connecting to NInfer…'):null,
@@ -68,7 +79,7 @@ window.__ModuleLoader__.load({
      scan&&h('div',null,h('h4',null,`Models found (${scan.models.length})`),...scan.models.map(model=>h('div',{className:'ninfer-row',key:model.path},h('div',null,h('strong',null,model.name),h('p',{className:'ninfer-path'},model.path),h('small',null,model.complete?`${model.nativeContext||'Unknown'} native context · ${model.components.join(', ')}`:'Missing files: '+model.missing.join(', '))),button(model.complete?'Add model':'Missing files',()=>choose(model),busy||!model.complete))),scan.errorCount>0&&h('p',null,`${scan.errorCount} files or folders could not be inspected.`))),
     data&&view==='download'&&h('div',null,h('p',null,'Download a listed model or import files you already have.'),...((catalog?.models||[]).map(model=>{const job=catalog.jobs.filter(j=>j.modelId===model.id).at(-1),downloadable=model.files.length&&model.files.every(file=>file.downloadable);return h('div',{className:'ninfer-row',key:model.id},h('div',null,h('strong',null,model.name),job&&h('p',null,`${job.status} · ${job.progress}`)),downloadable&&button('Download',()=>run('recommendedDownload',{id:model.id}),busy||job?.status==='running'),job?.status==='complete'&&button('Open downloaded files',async()=>{setView('files');await browse(job.directory);},busy));}))),
     data&&view==='editor'&&draft&&h('div',null,button('← Models',()=>{setDraft(null);setView('models');}),h('h4',null,draft.name),h('p',{className:'ninfer-path'},draft.modelPath),
-     h('div',{className:'ninfer-grid'},h('label',null,'Name',h('input',{value:draft.name,onChange:e=>edit('name',e.target.value)})),h('label',null,'Context',h('select',{value:draft.context,onChange:e=>edit('context',Number(e.target.value))},...Array.from(new Set([draft.context,draft.nativeContext,...Array.from({length:Math.ceil((draft.nativeContext||Math.max(draft.context,262144))/32768)},(_,i)=>(i+1)*32768)].filter(x=>x>0&&x<=Math.max(draft.context,draft.nativeContext||262144)))).sort((a,b)=>a-b).map(n=>h('option',{key:n,value:n},n===draft.nativeContext?`Native (${n.toLocaleString()})`:n.toLocaleString())))),
+     h('div',{className:'ninfer-grid'},h('label',null,'Model name',h('input',{value:draft.name,onChange:e=>edit('name',e.target.value)})),h('label',null,'Context',h('select',{value:draft.context,onChange:e=>edit('context',Number(e.target.value))},...Array.from(new Set([draft.context,draft.nativeContext,...Array.from({length:Math.ceil((draft.nativeContext||Math.max(draft.context,262144))/32768)},(_,i)=>(i+1)*32768)].filter(x=>x>0&&x<=Math.max(draft.context,draft.nativeContext||262144)))).sort((a,b)=>a-b).map(n=>h('option',{key:n,value:n},n===draft.nativeContext?`Native (${n.toLocaleString()})`:n.toLocaleString())))),
      h('label',null,'KV precision',h('select',{value:draft.options['--kv-dtype']||'',onChange:e=>option('--kv-dtype',e.target.value)},...Array.from(new Set(['','bf16','int8','fp8','rk8v4','rk4v4','rk4v4-e8','rk2v4-e8','nvfp4','k8v4',...(data.customRuntime?['q5_1','q6_0']:[]),draft.options['--kv-dtype']||''])).map(x=>h('option',{key:x,value:x},x||'Engine default'))))),
      !draft.nativeContext&&h('p',null,'Native context was not found; the engine default is selected.'),h('p',null,draft.components?.includes('vision')?'Vision is built into this artifact.':'No built-in vision component detected.'),h('p',null,draft.components?.includes('mtp')?(draft.options['--spec']==='mtp'?'Built-in MTP enabled (NInfer default draft width).':'Built-in MTP is available.'):'No built-in MTP detected.'),
      h('details',null,h('summary',null,'Advanced'),h('div',{className:'ninfer-grid'},h('label',null,'Port',h('input',{type:'number',value:draft.port,onChange:e=>edit('port',Number(e.target.value))})),h('label',null,'GPU index',h('input',{type:'number',value:draft.gpu,onChange:e=>edit('gpu',Number(e.target.value))}))),h('label',null,h('input',{type:'checkbox',checked:draft.kvCache===true,onChange:e=>edit('kvCache',e.target.checked)}),' Save conversation checkpoints (16 GiB per model)'),h('p',null,'DFlash and DFlash2 cannot save checkpoints in the official NInfer runtime; unsupported saves show a warning.'),draft.runtimeNotice&&h('p',{role:'alert',className:'ninfer-error'},draft.runtimeNotice),h('label',null,'Engine executable',h('input',{value:draft.executable||'',placeholder:'Automatically installed runtime',onChange:e=>edit('executable',e.target.value)}))),

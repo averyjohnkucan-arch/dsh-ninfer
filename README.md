@@ -37,3 +37,7 @@ Use **Import config**, select that JSON, and enter a model folder. The plugin se
 Runtime downloads retry three times automatically. Bad checksums discard the damaged part before restarting it; interrupted transfers resume. A failed installation keeps a Retry button visible. Complete verified runtime folders are reused, and incomplete folders are preserved while a replacement is staged.
 
 Recovered configs preserve placement, host cache, graph, draft, output-limit and sampling settings. Cache-stable history uses the bundled template; imported JSON cannot choose a template path or executable. On Blackwell, the automatically installed custom engine supports recovered Q5_1/Q6_0 KV profiles; no executable selection is required. Advanced settings retain an optional executable override for other compatible builds.
+
+Changing Context keeps an explicit KV capacity in sync when it tracked the old context or would be too small for the new context. Automatic capacity and larger custom pools are preserved. Re-saving an older profile repairs a capacity below its selected context without changing KV precision. Startup failures show the engine's diagnostic instead of its usage manual.
+
+Rename a saved model under **Settings → Model name → Save**. The name is used in the model list and DSH model picker; its file paths, native model ID and tuning settings are preserved.
