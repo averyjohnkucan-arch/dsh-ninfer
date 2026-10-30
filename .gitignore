@@ -5,3 +5,7 @@ node_modules/
 .env
 __pycache__/
 *.pyc
+
+# DSH compatibility workflow scratch data
+.compat-home/
+.compat-packed/
