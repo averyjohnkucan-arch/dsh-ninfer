@@ -1,12 +1,12 @@
 {
   "name": "dsh-ninfer",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "NInfer local inference provider, model profiles and engine controls for DeepSeek Harness.",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.19",
-    "dsh": "0.2.1-rc.2"
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
   },
   "repository": {
     "type": "git",
@@ -38,16 +38,17 @@
     "test": "node --test test/*.test.js && python3 -m unittest discover -s test -p '*_test.py'",
     "check": "node --check index.js && node --check client.js",
     "setup:engine": "node scripts/setup-engine.js",
-    "build:checkpoints": "node scripts/build-checkpoint-engine.js"
+    "build:checkpoints": "node scripts/build-checkpoint-engine.js",
+    "check:dsh": "node scripts/check-dsh-compatibility.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5",
-    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-llm-pi-ai": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-llm-pi-ai": ">=0.2.1-rc.2 <0.3.0-0",
     "@deepseek-ai/schemastery": "~3.18.5",
     "@earendil-works/pi-ai": "1.3.0",
-    "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2"
+    "@deepseek-ai/dsh-sandbox": ">=0.2.1-rc.2 <0.3.0-0"
   },
   "dsh": {
     "bundle": {
