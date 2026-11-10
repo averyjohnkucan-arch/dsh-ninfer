@@ -51,3 +51,9 @@ Rates come from NInfer's native timings and are saved per profile. Changing exec
 ## Shared GPU handoff
 
 Install [dsh-model-scheduler](https://github.com/averyjohnkucan-arch/dsh-model-scheduler) alongside NInfer and restart DSH. The optional service queues chat, manual loads, speed tests and GPU calibration on the selected GPU. Chat retains admission through checkpoint saving. Strata 0.6.4+ and Dory use the same interface. The card shows **Shared GPU scheduler** when attached, otherwise **Independent GPU queue**. Without the scheduler, unload other providers' models yourself before loading on the same GPU. No hard dependency is added.
+
+### Long-running subagents
+
+Local inference and independent base prefill allow 24 hours without output by default (`requestIdleTimeoutMs: 86400000` in the `dsh-ninfer` Cordis config). Long context prefill can be silent; the former 15-minute limit could repeatedly fail translation workers. The interval is configurable from 1 to 2147483647 milliseconds. A stalled admitted request still fails after that interval; this is not an unlimited wait.
+
+GPU admission and the serial checkpoint queue wait outside the inference idle watchdog. Stop cancels queued requests promptly without allowing later requests to bypass the active owner. These changes do not resume existing sessions.

@@ -1,3 +1,4 @@
+import { DEFAULT_REQUEST_IDLE_TIMEOUT_MS, MAX_REQUEST_IDLE_TIMEOUT_MS } from './lib/request-timeout.js';
 import z from '@deepseek-ai/schemastery';
 import { handler, actionPath } from './lib/http.js';
 import { Runtime } from './lib/runtime.js';
@@ -5,7 +6,7 @@ import { LocalAdapter } from './lib/adapter.js';
 import { approveEscalation } from '@deepseek-ai/dsh-sandbox';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 export const inject = ['llm','connection'];
-export const Config=z.object({dataDir:z.string().description('Plugin-owned profiles, engine and tuning data directory.').default('')});
+export const Config=z.object({requestIdleTimeoutMs:z.number().min(1).max(MAX_REQUEST_IDLE_TIMEOUT_MS).description('Idle limit for local inference and base prefill, excluding queue wait, in milliseconds.').default(DEFAULT_REQUEST_IDLE_TIMEOUT_MS),dataDir:z.string().description('Plugin-owned profiles, engine and tuning data directory.').default('')});
 export async function apply(ctx, config) {
  const id='ninfer', title='NInfer';
  let registration;
