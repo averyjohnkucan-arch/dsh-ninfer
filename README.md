@@ -12,6 +12,8 @@ This custom runtime uses upstream revision `5ed86dff9fe3a5a0776f40a7aea86cf381da
 
 Progress, cancellation and retry appear in **Settings → Models → NInfer → Activity**. Existing runtimes are preserved while a verified replacement is staged. Native GPU calibration defaults to the plugin's own data directory. Models are imported separately and stay where they are.
 
+The official fallback is pinned to NInfer-all release `2026-11-13.2`. An optional [latest-source NVFP4 DFlash2 build](docs/latest-source-engine.md) is available separately from the packaged legacy KV runtime.
+
 ## Models and tuning
 
 Choose **Import files**, open a folder and scan it. Complete models can be added; incomplete artifacts show their missing files. The plugin reads manifests and leaves weights in place. NInfer consumes `.ninfer` artifacts. A GGUF must first be converted with NInfer's tools; it is not silently converted here.
