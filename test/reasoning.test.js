@@ -3,17 +3,17 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { LocalAdapter } from '../lib/adapter.js';
 import { freshProfile,validateProfile } from '../lib/profiles.js';
-import { profileReasoning,qwen38Reasoning,migrateOffReasoning } from '../lib/reasoning.js';
+import { profileReasoning,qwen38Reasoning,migrateOffReasoning,offReasoning } from '../lib/reasoning.js';
 
 test('Qwen3.8 profiles default to off, low, medium, xhigh with medium selected',()=>{
  const p=freshProfile('ninfer');p.name='Qwen3.8 Flash Next · Gyro Large';
  assert.deepEqual(validateProfile(p).reasoning,qwen38Reasoning());
- p.name='Other model';assert.deepEqual(profileReasoning(p).efforts,[]);
- p.reasoning={efforts:[],defaultEffort:''};p.name='Qwen3.8';assert.equal(profileReasoning(p).efforts.length,0);
+ p.name='Other model';assert.deepEqual(profileReasoning(p).efforts,[offReasoning()]);
+ p.reasoning={efforts:[],defaultEffort:''};p.name='Qwen3.8';assert.equal(profileReasoning(p).efforts.length,1);
 });
 test('custom names and wire values persist; invalid defaults and duplicate IDs fail',()=>{
  const p=freshProfile('ninfer');p.reasoning={efforts:[{id:'quick',name:'Quick',value:'low'},{id:'deep',name:'Thorough',value:'xhigh'}],defaultEffort:'quick'};
- assert.deepEqual(validateProfile(JSON.parse(JSON.stringify(p))).reasoning,p.reasoning);
+ assert.deepEqual(validateProfile(JSON.parse(JSON.stringify(p))).reasoning,{...p.reasoning,efforts:[...p.reasoning.efforts,offReasoning()]});
  p.reasoning.defaultEffort='missing';assert.throws(()=>validateProfile(p),/default reasoning/);
  p.reasoning.defaultEffort='quick';p.reasoning.efforts.push(p.reasoning.efforts[0]);assert.throws(()=>validateProfile(p),/unique/);
 });

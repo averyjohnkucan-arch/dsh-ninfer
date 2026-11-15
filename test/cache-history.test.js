@@ -80,12 +80,12 @@ test('installed DSH/pi-ai route anchors system and tool updates instead of rewri
  assert.ok(second.messages.every(m=>!m.tools));
 });
 
-test('the old capability declaration reproduces the prefix rewrite on the same system update',async t=>{
+test('current DSH preserves the system prefix even without the optional stable-history engine mode',async t=>{
  const {bodies,call}=await fixture(t,false);
  await call([user('Hello')]);
  await call([user('Hello'),assistant('Hi'),{id:'system-update',role:'system',content:[text('New retrieved knowledge')]},user('Next')]);
- assert.notDeepEqual(bodies[0].messages[0],bodies[1].messages[0]);
- assert.ok(bodies[1].messages[0].content.includes('New retrieved knowledge'));
+ assert.deepEqual(bodies[0].messages[0],bodies[1].messages[0]);
+ assert.ok(bodies[1].messages.slice(1).some(message=>JSON.stringify(message.content).includes('New retrieved knowledge')));
 });
 
 test('real pi-ai route forwards chat identity and shared-prefix metadata on every step',async t=>{
