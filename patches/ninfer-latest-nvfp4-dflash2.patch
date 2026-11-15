@@ -1,0 +1,2579 @@
+diff --git a/docs/features/nvfp4-dflash2.md b/docs/features/nvfp4-dflash2.md
+new file mode 100644
+index 0000000..96cabc0
+--- /dev/null
++++ b/docs/features/nvfp4-dflash2.md
+@@ -0,0 +1,7 @@
++# Weight-only NVFP4 DFlash2
++
++Qwen3.8-27B DFlash2 components may store their projection, convolution and selector codebook matrices as weight-only NVFP4. Runtime binding preserves their codes, group scales, tensor divisors and tile-aligned subview offsets. Projection routes use BF16 activations; the selector accumulates conditional scores from represented FP32 codebook values and BF16 projected hidden states.
++
++Use a compatible `.ninfer` artifact containing the DFlash2 component and select `--spec dflash2 --draft-tokens 7`. See [DFlash semantics](../maintainer/dflash.md) for proposal distributions, target verification and context state. An optional selector confidence output reports the selected candidate's temperature-one probability.
++
++The selector tests cover independent FP64 references, direct and lattice schedules, batch and width boundaries, exact greedy selection, sampled proposal distributions, graph replay and confidence. Projection, convolution and context tests cover represented NVFP4 inputs at model geometries. These focused checks establish Op behavior; whole-model throughput, long-context quality and BF16-reference perplexity need their own measurements. The custom build is qualified on Linux consumer Blackwell; other platform results are not established here.
+diff --git a/docs/maintainer/dflash.md b/docs/maintainer/dflash.md
+index 49b2869..0b2951a 100644
+--- a/docs/maintainer/dflash.md
++++ b/docs/maintainer/dflash.md
+@@ -192,7 +192,10 @@ selection does not apply target penalties, temperature or top-k/top-p/min-p.
+ 
+ Let predecessor/successor codebooks have shape `[vocab_size,R]` and the hidden projection have
+ shape `[R,H]`. The current selector receives its projected hidden g_i as BF16, candidate scores as
+-FP32 and codebooks as BF16. For predecessor candidate p and current candidate c:
++FP32 and codebooks as BF16, weight-only NVFP4 K16M128x4, or GGUF Q4_0 rows.
++NVFP4 codebooks retain their stored codes, group scales and tensor divisor; their
++represented FP32 values enter the edge sum without a BF16 intermediate. For
++predecessor candidate p and current candidate c:
+ 
+ ```text
+ g_i = W_hidden h_i
+diff --git a/include/ninfer/ops/attn_input_proj.h b/include/ninfer/ops/attn_input_proj.h
+index a531722..700568d 100644
+--- a/include/ninfer/ops/attn_input_proj.h
++++ b/include/ninfer/ops/attn_input_proj.h
+@@ -160,13 +160,15 @@ void attn_input_proj(const Tensor& x, const Weight& query_key_gate_value_weight,
+                      Tensor& gate, Tensor& k, Tensor& v, cudaStream_t stream);
+ 
+ /**
+- * Three-output Q8 specialization. The Q8_G32_FP16 RowSplit parent stores rows in order
+- * [query 4096, key 1024, value 1024]. Registered parent forms are [6144,2048] with BF16
+- * x [2048,T] for the Qwen3.6 companion and [6144,5120] with BF16 x [5120,T] for DFlash2.
+- * q is contiguous BF16 [4096,T], and k/v are contiguous BF16 [1024,T]. Every route writes the
+- * three independent final allocations directly; no parent output or transient workspace is
+- * materialized. T may be any positive value. Q and K remain raw projection outputs: this Op does
+- * not normalize or rotate either tensor.
++ * Three-output specialization. The parent stores rows in physical order [query, key, value].
++ * Registered parent forms are the Q8_G32_FP16 RowSplit matrices [6144,2048] with BF16 x [2048,T]
++ * for the Qwen3.6 companion, [6144,5120] with BF16 x [5120,T] for DFlash2, and the weight-only
++ * NVFP4 BlockScaleK16M128x4 matrix [6144,5120] with BF16 x [5120,T] for the NVFP4-encoded
++ * DFlash2 module. q is contiguous BF16 [4096,T], and k/v are contiguous BF16 [1024,T]. Every
++ * route writes the three independent final allocations directly; no parent output or transient
++ * workspace is materialized. T may be any positive value (the NVFP4 route serves extents above
++ * its fused small-T family in 32-token chunks). Q and K remain raw projection outputs: this Op
++ * does not normalize or rotate either tensor.
+  */
+ void attn_input_proj(const Tensor& x, const Weight& query_key_value_weight, Tensor& q, Tensor& k,
+                      Tensor& v, cudaStream_t stream);
+diff --git a/include/ninfer/ops/candidate_selector.h b/include/ninfer/ops/candidate_selector.h
+index 447f47e..da706e6 100644
+--- a/include/ninfer/ops/candidate_selector.h
++++ b/include/ninfer/ops/candidate_selector.h
+@@ -52,8 +52,11 @@ void candidate_selector_path(const Tensor& candidate_ids, const Tensor& unary_sc
+                              cudaStream_t stream);
+ 
+ /**
+- * The same Op over codebooks stored as ggml Q4_0 rows (a GGUF drafter's, kept as stored): each
+- * Weight is GGUF_Q4_0 with n=248320 rows of k=256 values, a row 8 blocks of 18 bytes (a binary16
++ * The same Op over BF16, weight-only NVFP4 K16M128x4, or ggml Q4_0 codebooks, each
++ * with n=248320 rows of k=256 values. BF16 codebooks are contiguous. NVFP4 uses packed
++ * E2M1 pairs, UE4M3 scales per 16 values and a positive tensor divisor; each codebook value
++ * enters the edge formula as its represented FP32 value, without an intermediate BF16 cast.
++ * A Q4_0 row has 8 blocks of 18 bytes (a binary16
+  * scale d and 16 bytes of codes; value j of a block is d * (q_j - 8), q_j the low nibble of byte j
+  * for j<16 and the high nibble of byte j-16). Every codebook value enters the formula above as that
+  * exact FP32 product; the rest of the contract is unchanged. With `confidence`, contiguous FP32
+diff --git a/include/ninfer/ops/linear_swiglu.h b/include/ninfer/ops/linear_swiglu.h
+index 7d0ccf0..62000d7 100644
+--- a/include/ninfer/ops/linear_swiglu.h
++++ b/include/ninfer/ops/linear_swiglu.h
+@@ -27,8 +27,9 @@ namespace ninfer::ops {
+ 
+ /**
+  * Policy-bearing capacity query. Q4/Q8 use A16 under every policy. NVFP4 uses A16 under
+- * A16Only/AllowA8 through T=16; AllowA4 accepts every positive T. Row-scaled FP8 accepts all
+- * policies, with A8 permitted by AllowA8/AllowA4.
++ * A16Only/AllowA8 at every positive T — fused through T=16, then a linear-then-silu_mul
++ * decomposition that materializes the gate/up projection — and AllowA4 accepts every positive
++ * T. Row-scaled FP8 accepts all policies, with A8 permitted by AllowA8/AllowA4.
+  * A permissive policy covers whichever qualified route the private resolver selects across the
+  * requested interval.
+  */
+@@ -78,8 +79,8 @@ void linear_swiglu(const Tensor& x, const Weight& gate_up_weight, Tensor& out, L
+ 
+ /**
+  * A16-only convenience form. Q4/Q8 and row-scaled FP8 retain their complete positive-T domain.
+- * NVFP4 is admitted only through T=16; larger NVFP4 extents require the policy-bearing AllowA4
+- * form.
++ * NVFP4 keeps the complete positive-T domain: the fused small-T family through T=16, then the
++ * workspace-bearing linear-then-silu_mul decomposition.
+  */
+ void linear_swiglu(const Tensor& x, const Weight& gate_up_weight, Tensor& out, WorkspaceArena& ws,
+                    cudaStream_t stream);
+diff --git a/src/core/weight_view.cpp b/src/core/weight_view.cpp
+index 0669f53..f843b04 100644
+--- a/src/core/weight_view.cpp
++++ b/src/core/weight_view.cpp
+@@ -323,15 +323,27 @@ Weight native_weight(const WeightView& view, float input_divisor) {
+         throw std::invalid_argument("quantized native Weight requires unchanged parent K");
+     }
+     const auto planes = weight_row_planes(region);
+-    if ((g.layout == QuantLayout::RowScale || g.layout == QuantLayout::BlockScaleK16M128x4) &&
+-        !is_complete_weight(view)) {
+-        throw std::invalid_argument(
+-            "this native Weight input requires a complete FP8/NVFP4 parent");
++    out.scales = planes.scales;
++    if (g.layout == QuantLayout::RowScale && !is_complete_weight(view)) {
++        throw std::invalid_argument("this native Weight input requires a complete FP8 parent");
++    }
++    if (g.layout == QuantLayout::BlockScaleK16M128x4 && !is_complete_weight(view)) {
++        // The m128x4 scale swizzle is row-tile-major, so a 128-row-aligned sub-range of an
++        // NVFP4 parent is itself a complete BlockScaleK16M128x4 matrix: the codes plane
++        // shifts by whole code rows and the scale plane by whole 512-byte scale tiles. This
++        // serves the NVFP4 DFlash2 module, whose context K/V rows share the fused
++        // query/key/value parent at exact 128-row boundaries.
++        const bool tile_aligned =
++            planes.row_begin % 128 == 0 && planes.row_count % 128 == 0 && planes.swizzled_scales;
++        if (!tile_aligned) {
++            throw std::invalid_argument(
++                "this native Weight input requires a complete or 128-row-aligned NVFP4 parent");
++        }
++        out.scales = planes.scales + (planes.row_begin / 128) * (out.k / 64) * 512;
+     }
+     out.padded_shape[1]      = dimension(g.padded_columns);
+     out.qdata                = planes.codes;
+     out.qhigh                = planes.high;
+-    out.scales               = planes.scales;
+     out.group_size           = static_cast<std::uint32_t>(g.group_size);
+     out.group                = g.group_size ? dimension(g.group_size) : 0;
+     out.weight_scale_divisor = region.parent->weight_scale_divisor;
+diff --git a/src/models/qwen3_5/execution/draft.cpp b/src/models/qwen3_5/execution/draft.cpp
+index d65d60e..cce0e3f 100644
+--- a/src/models/qwen3_5/execution/draft.cpp
++++ b/src/models/qwen3_5/execution/draft.cpp
+@@ -503,7 +503,8 @@ void propose_dflash2_batch(DFlashBatchContext& state, qwen3_5::DFlashDecodeState
+         ops::candidate_selector_path(
+             candidates, scores.view({dimension(config.dflash2->selector_top_k), k, batch}),
+             projected.view({dimension(config.dflash2->selector_rank), k, batch}), anchors,
+-            weights.selector->predecessor_codebook, weights.selector->successor_codebook, frontiers,
++            weights.selector->predecessor_codebook.weight,
++            weights.selector->successor_codebook.weight, frontiers,
+             frame.sampling, drafts, proposal_q, work, stream);
+         work.reset();
+     }
+diff --git a/src/models/qwen3_5/execution/parameters.cpp b/src/models/qwen3_5/execution/parameters.cpp
+index 519a2ac..e16799c 100644
+--- a/src/models/qwen3_5/execution/parameters.cpp
++++ b/src/models/qwen3_5/execution/parameters.cpp
+@@ -667,9 +667,18 @@ public:
+                 }));
+         }
+         if (w.selector) {
++            // Codebooks are lookup tables, not activation-bearing projections. Their
++            // representation may be BF16 or NVFP4; the selector owns the A16-only walk.
++            const auto codebook = [&](WeightId id) {
++                const auto& bound = model_.weight(id);
++                return with_context(bound.name, [&] {
++                    return ops::prepare_linear_weight(
++                        {bound.view, ops::LinearPolicy::A16Only, 1.0F});
++                });
++            };
+             out.selector = SelectorParameters{linear(w.selector->hidden_projection),
+-                                              tensor(w.selector->predecessor_codebook),
+-                                              tensor(w.selector->successor_codebook)};
++                                              codebook(w.selector->predecessor_codebook),
++                                              codebook(w.selector->successor_codebook)};
+         }
+         return out;
+     }
+diff --git a/src/models/qwen3_5/execution/parameters.h b/src/models/qwen3_5/execution/parameters.h
+index 2c08a62..5eaac25 100644
+--- a/src/models/qwen3_5/execution/parameters.h
++++ b/src/models/qwen3_5/execution/parameters.h
+@@ -201,7 +201,7 @@ struct DraftBlockParameters {
+ 
+ struct SelectorParameters {
+     LinearParameters hidden_projection;
+-    Tensor predecessor_codebook, successor_codebook;
++    LinearParameters predecessor_codebook, successor_codebook;
+ };
+ 
+ struct DraftParameters {
+diff --git a/src/models/qwen3_5/load/dflash2.cpp b/src/models/qwen3_5/load/dflash2.cpp
+index f5d09c8..7e502ae 100644
+--- a/src/models/qwen3_5/load/dflash2.cpp
++++ b/src/models/qwen3_5/load/dflash2.cpp
+@@ -33,10 +33,10 @@ void bind_dflash2(Bindings& b, DraftWeights& weights, const DraftConfig& config,
+     weights.selector =
+         SelectorWeights{b.parameter("dflash2/candidate_selector/hidden_projection",
+                                     {extra.selector_rank, h}, {"dflash2/final_hidden"}),
+-                        b.direct("dflash2/candidate_selector/predecessor_codebook",
+-                                 {target.vocab_size, extra.selector_rank}),
+-                        b.direct("dflash2/candidate_selector/successor_codebook",
+-                                 {target.vocab_size, extra.selector_rank})};
++                        b.parameter("dflash2/candidate_selector/predecessor_codebook",
++                                    {target.vocab_size, extra.selector_rank}),
++                        b.parameter("dflash2/candidate_selector/successor_codebook",
++                                    {target.vocab_size, extra.selector_rank})};
+ }
+ 
+ } // namespace ninfer::models::qwen3_5::loading
+diff --git a/src/ops/attn_input_proj/nvfp4/nvfp4_attn_input_plan.h b/src/ops/attn_input_proj/nvfp4/nvfp4_attn_input_plan.h
+index 8b5dbfd..d3825bf 100644
+--- a/src/ops/attn_input_proj/nvfp4/nvfp4_attn_input_plan.h
++++ b/src/ops/attn_input_proj/nvfp4/nvfp4_attn_input_plan.h
+@@ -64,6 +64,11 @@ void nvfp4_attn_input_fused_rmsnorm_launch(const Tensor& residual, const Tensor&
+                                            float eps, const Weight& weight, Tensor& q, Tensor& gate,
+                                            Tensor& k, Tensor& v, WorkspaceArena& workspace,
+                                            cudaStream_t stream);
++// Three-output DFlash2 route: the weight-only NVFP4 [6144,5120] parent writing q [4096,T],
++// k [1024,T], and v [1024,T] directly at every positive T (32-token chunks above the small-T
++// family). No transient workspace.
++void nvfp4_dflash2_attn_input(const Tensor& x, const Weight& weight, Tensor& q, Tensor& k,
++                              Tensor& v, cudaStream_t stream);
+ 
+ void nvfp4_attn_input_dispatch(const Tensor& x, const Weight& weight, Tensor& q, Tensor& gate,
+                                Tensor& k, Tensor& v, LinearPolicy policy, WorkspaceArena* workspace,
+diff --git a/src/ops/attn_input_proj/nvfp4/nvfp4_dflash2_attn_input.cu b/src/ops/attn_input_proj/nvfp4/nvfp4_dflash2_attn_input.cu
+new file mode 100644
+index 0000000..a1e8eaf
+--- /dev/null
++++ b/src/ops/attn_input_proj/nvfp4/nvfp4_dflash2_attn_input.cu
+@@ -0,0 +1,106 @@
++#include "ops/attn_input_proj/nvfp4/nvfp4_attn_input_plan.h"
++
++#include "core/device.h"
++#include "ops/common/token_slices.h"
++#include "ops/linear/nvfp4/nvfp4_dflash2_geometry.h"
++#include "ops/linear/nvfp4/nvfp4_gemv.cuh"
++#include "ops/linear/nvfp4/nvfp4_output.cuh"
++#include "ops/linear/nvfp4/nvfp4_simt.cuh"
++
++#include <algorithm>
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <utility>
++
++namespace ninfer::ops::detail {
++namespace {
++
++using Geometry = Nvfp4DFlash2QkvGeometry;
++using Output   = Nvfp4SplitOutput3<4096, 1024>;
++using Launch   = void (*)(const Tensor&, const Weight&, Tensor&, Tensor&, Tensor&, cudaStream_t);
++
++// The split-output epilogue owns the family's measured low-T warp mapping; see the four-output
++// route above for the crossover rationale.
++template <int ActiveTokens>
++struct Nvfp4DFlash2AttentionSmallTProductionSchedule {
++    static_assert(ActiveTokens >= kNvfp4FirstSmallT);
++    static_assert(ActiveTokens <= kNvfp4LastSmallT);
++    static constexpr int kWarpsPerCta       = ActiveTokens >= 17 ? 4 : (ActiveTokens >= 8 ? 16 : 8);
++    static constexpr int kValuesPerLane     = ActiveTokens >= 17 && ActiveTokens <= 20 ? 8 : 16;
++    static constexpr auto kActivationAccess = ActiveTokens <= 4
++                                                  ? Nvfp4SimtActivationAccess::SharedPhase
++                                                  : Nvfp4SimtActivationAccess::TokenPacked;
++    using Type =
++        Nvfp4SimtSchedule<kWarpsPerCta, 1, 2, kValuesPerLane, ActiveTokens, 1, kActivationAccess,
++                          Nvfp4ScaleAccess::Direct, Nvfp4CodeCache::Default, 1,
++                          Nvfp4SimtBlockOrder::RowsContiguous, 1>;
++};
++
++void launch_decode(const Tensor& x, const Weight& weight, Tensor& q, Tensor& k, Tensor& v,
++                   cudaStream_t stream) {
++    using Schedule =
++        Nvfp4GemvSchedule<8, 2, 16, 4, Nvfp4ScaleAccess::StagedRaw, Nvfp4CodeCache::Default, 2>;
++
++    const Output output{static_cast<__nv_bfloat16*>(q.data), static_cast<__nv_bfloat16*>(k.data),
++                        static_cast<__nv_bfloat16*>(v.data)};
++    constexpr int kBlocks              = Geometry::kOutputRows / Schedule::kRowsPerCta;
++    const float inverse_weight_divisor = 1.0F / weight.weight_scale_divisor;
++    nvfp4_gemv_kernel<Geometry, Schedule, Nvfp4IdentityEpilogue, Output>
++        <<<dim3(kBlocks), dim3(Schedule::kThreads), 0, stream>>>(
++            static_cast<const __nv_bfloat16*>(x.data),
++            static_cast<const std::uint8_t*>(weight.qdata),
++            static_cast<const std::uint8_t*>(weight.scales), inverse_weight_divisor,
++            Nvfp4IdentityEpilogue{}, output);
++    CUDA_CHECK(cudaGetLastError());
++}
++
++template <int ActiveTokens>
++void launch_exact(const Tensor& x, const Weight& weight, Tensor& q, Tensor& k, Tensor& v,
++                  cudaStream_t stream) {
++    using Schedule            = typename Nvfp4DFlash2AttentionSmallTProductionSchedule<ActiveTokens>::Type;
++    constexpr int kTokenTiles = (ActiveTokens + Schedule::kTokenTile - 1) / Schedule::kTokenTile;
++    constexpr int kBlocks     = (Geometry::kOutputRows / Schedule::kRowsPerCta) * kTokenTiles;
++
++    const Output output{static_cast<__nv_bfloat16*>(q.data), static_cast<__nv_bfloat16*>(k.data),
++                        static_cast<__nv_bfloat16*>(v.data)};
++    const float inverse_weight_divisor = 1.0F / weight.weight_scale_divisor;
++    nvfp4_simt_kernel<Geometry, ActiveTokens, Schedule, Nvfp4IdentityEpilogue, Output>
++        <<<dim3(kBlocks), dim3(Schedule::kThreads), 0, stream>>>(
++            static_cast<const __nv_bfloat16*>(x.data),
++            static_cast<const std::uint8_t*>(weight.qdata),
++            static_cast<const std::uint8_t*>(weight.scales), inverse_weight_divisor,
++            Nvfp4IdentityEpilogue{}, output);
++    CUDA_CHECK(cudaGetLastError());
++}
++
++template <std::size_t... Offsets>
++constexpr auto make_launchers(std::index_sequence<Offsets...>) {
++    return std::array<Launch, sizeof...(Offsets)>{
++        &launch_exact<kNvfp4FirstSmallT + static_cast<int>(Offsets)>...};
++}
++
++constexpr auto kLaunchers =
++    make_launchers(std::make_index_sequence<kNvfp4LastSmallT - kNvfp4FirstSmallT + 1>{});
++
++} // namespace
++
++void nvfp4_dflash2_attn_input(const Tensor& x, const Weight& weight, Tensor& q, Tensor& k,
++                              Tensor& v, cudaStream_t stream) {
++    constexpr std::int32_t kChunk = kNvfp4LastSmallT;
++    for (std::int32_t token_begin = 0; token_begin < x.ne[1]; token_begin += kChunk) {
++        const std::int32_t active = std::min(kChunk, x.ne[1] - token_begin);
++        const Tensor x_slice      = x.slice(1, token_begin, active);
++        Tensor q_slice            = q.slice(1, token_begin, active);
++        Tensor k_slice            = k.slice(1, token_begin, active);
++        Tensor v_slice            = v.slice(1, token_begin, active);
++        if (active == 1) {
++            launch_decode(x_slice, weight, q_slice, k_slice, v_slice, stream);
++        } else {
++            kLaunchers[active - kNvfp4FirstSmallT](x_slice, weight, q_slice, k_slice, v_slice,
++                                                   stream);
++        }
++    }
++}
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/attn_input_proj/sources.cmake b/src/ops/attn_input_proj/sources.cmake
+index 66ca869..97ad1e2 100644
+--- a/src/ops/attn_input_proj/sources.cmake
++++ b/src/ops/attn_input_proj/sources.cmake
+@@ -29,6 +29,7 @@ target_sources(ninfer_ops PRIVATE
+   "${CMAKE_CURRENT_LIST_DIR}/nvfp4/nvfp4_attn_input_fused_rmsnorm_w4a4.cu"
+   "${CMAKE_CURRENT_LIST_DIR}/nvfp4/nvfp4_attn_input_plan.cpp"
+   "${CMAKE_CURRENT_LIST_DIR}/nvfp4/nvfp4_attn_input_plan_unified.cpp"
++  "${CMAKE_CURRENT_LIST_DIR}/nvfp4/nvfp4_dflash2_attn_input.cu"
+   "${CMAKE_CURRENT_LIST_DIR}/q4_q5/q4_q5_attn_input_gemm_mma.cu"
+   "${CMAKE_CURRENT_LIST_DIR}/q4_q5/q4_q5_attn_input_small_t.cu"
+   "${CMAKE_CURRENT_LIST_DIR}/q4_q5/q4_q5_attn_input_small_t_unified.cu"
+diff --git a/src/ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.cu b/src/ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.cu
+new file mode 100644
+index 0000000..78b7f3d
+--- /dev/null
++++ b/src/ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.cu
+@@ -0,0 +1,298 @@
++// NVFP4 codebook route of candidate_selector_path: the [248320,256] codebooks are weight-only
++// NVFP4 (packed E2M1 pairs with one E4M3 scale per 16-rank group and a payload divisor). The
++// walk structure, draw, and lattice are shared with the BF16 family; only row access decodes.
++// Successor rows stage raw codes and scales through cp_async and decode to FP32 after the wait;
++// predecessor elements decode inline at their point of use.
++#include "ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.h"
++
++#include "core/device.h"
++#include "ops/common/memory.cuh"
++#include "ops/common/warp.cuh"
++#include "ops/kernel/sampling_device.cuh"
++#include "ops/linear/nvfp4/nvfp4_codec.cuh"
++#include <cuda_bf16.h>
++#include <stdexcept>
++
++namespace ninfer::ops::detail {
++namespace {
++
++constexpr int kCandidates = 16, kRank = 256;
++
++constexpr int kCodeBytesPerRow  = kRank / 2;
++constexpr int kScaleBytesPerRow = kRank / 16;
++
++// The codebook scale plane follows the registered K16M128x4 blocked arrangement shared by every
++// NVFP4 payload: 512-byte tiles of 128 rows x 4 consecutive groups.
++__device__ __forceinline__ int codebook_scale_offset(int token, int group) {
++    const int in_tile = (token % 32) * 16 + ((token % 128) / 32) * 4;
++    return (token / 128) * 4 * 512 + (group / 4) * 512 + in_tile + group % 4;
++}
++
++struct DeviceArgs {
++    const std::int32_t* ids;
++    const float* unary;
++    const __nv_bfloat16* hidden;
++    const std::int32_t* anchors;
++    const std::uint8_t* predecessor_codes;
++    const std::uint8_t* predecessor_scales;
++    float predecessor_inverse_divisor;
++    const std::uint8_t* successor_codes;
++    const std::uint8_t* successor_scales;
++    float successor_inverse_divisor;
++    const std::int32_t* positions;
++    const SamplingConfig* configs;
++    std::int32_t* drafts;
++    float* q;
++    float* confidence;
++    int steps;
++};
++
++struct alignas(16) SelectorShared {
++    std::uint8_t successor_staged[kCandidates * kCodeBytesPerRow];
++    std::uint8_t successor_staged_scales[kCandidates * kScaleBytesPerRow];
++    float successors[kCandidates * kRank];
++    float product[kRank];
++    float edge[kCandidates];
++    int predecessor, base_position;
++    float temperature;
++    unsigned long long seed;
++};
++
++__device__ __forceinline__ float decode_rank(const std::uint8_t* codes,
++                                             const std::uint8_t* scales, int token, int rank) {
++    const float2 pair = decode_nvfp4_e2m1x2(codes[token * kCodeBytesPerRow + (rank >> 1)]);
++    const float code  = (rank & 1) != 0 ? pair.y : pair.x;
++    return code * decode_nvfp4_e4m3(scales[codebook_scale_offset(token, rank >> 4)]);
++}
++
++// The probabilities written here are the same FP32 values consumed by the draw.
++__device__ int draw_rank(float edge, float temperature, unsigned long long seed, int position,
++                         float* q, float* confidence) {
++    const int lane      = threadIdx.x & 31;
++    const float maximum = warp_max(edge);
++    if (temperature <= 0.0F) {
++        const unsigned winners =
++            __ballot_sync(kFullWarpMask, lane < kCandidates && edge == maximum);
++        const int selected = winners == 0 ? 0 : __ffs(winners) - 1;
++        if (lane < kCandidates) q[lane] = lane == selected ? 1.0F : 0.0F;
++        if (confidence != nullptr) {
++            const float weight = lane < kCandidates ? __expf(edge - maximum) : 0.0F;
++            const float normalizer = warp_sum(weight);
++            if (lane == selected) *confidence = weight / normalizer;
++        }
++        return selected;
++    }
++    const float weight      = lane < kCandidates ? __expf((edge - maximum) / temperature) : 0.0F;
++    const float probability = weight / warp_sum(weight);
++    if (lane < kCandidates) q[lane] = probability;
++    float uniform =
++        lane == 0 ? sampling_uniform(seed, position, kSamplePurposeDFlash2Proposal, 0U) : 0.0F;
++    uniform          = __shfl_sync(kFullWarpMask, uniform, 0);
++    float cumulative = probability;
++#pragma unroll
++    for (int offset = 1; offset < kCandidates; offset *= 2) {
++        const float previous = __shfl_up_sync(kFullWarpMask, cumulative, offset);
++        if (lane >= offset) cumulative += previous;
++    }
++    const unsigned hits = __ballot_sync(kFullWarpMask, lane < kCandidates && uniform < cumulative);
++    const int selected = hits ? __ffs(hits) - 1 : kCandidates - 1;
++    if (confidence != nullptr) {
++        const float weight = lane < kCandidates ? __expf(edge - maximum) : 0.0F;
++        const float normalizer = warp_sum(weight);
++        if (lane == selected) *confidence = weight / normalizer;
++    }
++    return selected;
++}
++
++__device__ void score_row(const DeviceArgs& a, int column, SelectorShared& shared) {
++    const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
++    int token = lane == 0 ? a.ids[column * kCandidates + warp] : 0;
++    token     = __shfl_sync(kFullWarpMask, token, 0);
++    // Stage one packed successor row per warp: 128 code bytes (row-major) and the row's four
++    // 4-byte scale groups, one per 512-byte K16M128x4 tile, gathered into natural group order.
++    if (lane < kCodeBytesPerRow / 16) {
++        cp_async<16, Cache::cg>(
++            &shared.successor_staged[warp * kCodeBytesPerRow + lane * 16],
++            a.successor_codes + static_cast<std::int64_t>(token) * kCodeBytesPerRow + lane * 16);
++    }
++    if (lane < 4) {
++        const int in_tile = (token % 32) * 16 + ((token % 128) / 32) * 4;
++        cp_async<4>(&shared.successor_staged_scales[warp * kScaleBytesPerRow + lane * 4],
++                    a.successor_scales + (static_cast<std::int64_t>(token / 128) * 4 + lane) *
++                                              512 +
++                        in_tile);
++    }
++    cp_commit();
++    // Publish the preceding draw before reading its token. Successor prefetch is independent.
++    __syncthreads();
++    if (tid < kRank) {
++        shared.product[tid] =
++            decode_rank(a.predecessor_codes, a.predecessor_scales, shared.predecessor, tid) *
++            a.predecessor_inverse_divisor *
++            __bfloat162float(a.hidden[static_cast<std::int64_t>(column) * kRank + tid]);
++    }
++    cp_wait<0>();
++    __syncthreads();
++    for (int item = tid; item < kCandidates * kRank; item += 512) {
++        const int candidate = item / kRank, rank = item % kRank;
++        const float2 pair   = decode_nvfp4_e2m1x2(
++            shared.successor_staged[candidate * kCodeBytesPerRow + (rank >> 1)]);
++        const float code = (rank & 1) != 0 ? pair.y : pair.x;
++        const float scale =
++            decode_nvfp4_e4m3(shared.successor_staged_scales[candidate * kScaleBytesPerRow +
++                                                             (rank >> 4)]);
++        shared.successors[item] = code * scale * a.successor_inverse_divisor;
++    }
++    __syncthreads();
++    {
++        const int c = warp;
++        float sum   = 0;
++#pragma unroll
++        for (int r = lane; r < kRank; r += 32)
++            sum = fmaf(shared.product[r], shared.successors[c * kRank + r], sum);
++        sum = warp_reduce_sum(sum);
++        if (lane == 0) shared.edge[c] = a.unary[column * kCandidates + c] + sum;
++    }
++    __syncthreads();
++}
++
++__global__ __launch_bounds__(512, 1) void selector_walk_nvfp4_kernel(DeviceArgs a) {
++    __shared__ SelectorShared shared;
++    const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31, batch = blockIdx.x;
++    if (tid == 0) {
++        shared.predecessor   = a.anchors[batch];
++        shared.base_position = a.positions[batch];
++        shared.temperature   = a.configs[batch].temperature;
++        shared.seed          = a.configs[batch].seed;
++    }
++#pragma unroll 1
++    for (int step = 0; step < a.steps; ++step) {
++        const int column = batch * a.steps + step;
++        score_row(a, column, shared);
++        if (warp == 0) {
++            const float edge   = lane < kCandidates ? shared.edge[lane] : -CUDART_INF_F;
++            const int selected = draw_rank(edge, shared.temperature, shared.seed,
++                                           shared.base_position + step, a.q + column * kCandidates,
++                                           a.confidence ? a.confidence + column : nullptr);
++            if (lane == 0) {
++                shared.predecessor = a.ids[column * kCandidates + selected];
++                a.drafts[column]   = shared.predecessor;
++            }
++        }
++    }
++}
++
++__global__ __launch_bounds__(512, 2) void selector_lattice_nvfp4_kernel(DeviceArgs a, float* edges) {
++    const int column = blockIdx.x, p = blockIdx.y;
++    const int step = column % a.steps, batch = column / a.steps;
++    if (step == 0 && p != 0) return;
++    __shared__ SelectorShared shared;
++    if (threadIdx.x == 0)
++        shared.predecessor = step == 0 ? a.anchors[batch] : a.ids[(column - 1) * kCandidates + p];
++    score_row(a, column, shared);
++    if (threadIdx.x < kCandidates)
++        edges[(static_cast<std::int64_t>(column) * kCandidates + p) * kCandidates + threadIdx.x] =
++            shared.edge[threadIdx.x];
++}
++
++__global__ __launch_bounds__(32) void selector_lattice_walk_nvfp4_kernel(DeviceArgs a,
++                                                                         const float* edges) {
++    const int lane = threadIdx.x, batch = blockIdx.x;
++    const auto seed         = a.configs[batch].seed;
++    const float temperature = a.configs[batch].temperature;
++    const int position      = a.positions[batch];
++    int predecessor_rank    = 0;
++#pragma unroll 1
++    for (int step = 0; step < a.steps; ++step) {
++        const int column = batch * a.steps + step;
++        const float edge =
++            lane < kCandidates
++                ? edges[(static_cast<std::int64_t>(column) * kCandidates + predecessor_rank) *
++                            kCandidates +
++                        lane]
++                : -CUDART_INF_F;
++        int selected =
++            draw_rank(edge, temperature, seed, position + step, a.q + column * kCandidates,
++                                           a.confidence ? a.confidence + column : nullptr);
++        predecessor_rank = selected;
++        if (lane == 0) a.drafts[column] = a.ids[column * kCandidates + selected];
++    }
++}
++
++} // namespace
++
++void candidate_selector_path_nvfp4_launch(SelectorRoute route, const Tensor& candidate_ids,
++                                          const Tensor& unary_scores,
++                                          const Tensor& projected_hidden, const Tensor& anchors,
++                                          const Weight& predecessor_codebook,
++                                          const Weight& successor_codebook,
++                                          const Tensor& base_positions,
++                                          const SamplingConfig* configs, Tensor& drafts,
++                                          Tensor& proposal_q, const SelectorWorkspace& workspace,
++                                          cudaStream_t stream, Tensor* confidence) {
++    const DeviceArgs args{static_cast<const std::int32_t*>(candidate_ids.data),
++                          static_cast<const float*>(unary_scores.data),
++                          static_cast<const __nv_bfloat16*>(projected_hidden.data),
++                          static_cast<const std::int32_t*>(anchors.data),
++                          static_cast<const std::uint8_t*>(predecessor_codebook.qdata),
++                          static_cast<const std::uint8_t*>(predecessor_codebook.scales),
++                          1.0F / predecessor_codebook.weight_scale_divisor,
++                          static_cast<const std::uint8_t*>(successor_codebook.qdata),
++                          static_cast<const std::uint8_t*>(successor_codebook.scales),
++                          1.0F / successor_codebook.weight_scale_divisor,
++                          static_cast<const std::int32_t*>(base_positions.data),
++                          configs,
++                          static_cast<std::int32_t*>(drafts.data),
++                          static_cast<float*>(proposal_q.data),
++                          confidence ? static_cast<float*>(confidence->data) : nullptr,
++                          candidate_ids.ne[1]};
++    if (route == SelectorRoute::Direct) {
++        selector_walk_nvfp4_kernel<<<candidate_ids.ne[2], 512, 0, stream>>>(args);
++    } else {
++        auto* edges = static_cast<float*>(workspace.edges.data);
++        selector_lattice_nvfp4_kernel<<<dim3(args.steps * candidate_ids.ne[2], kCandidates), 512, 0,
++                                        stream>>>(args, edges);
++        CUDA_CHECK(cudaGetLastError());
++        selector_lattice_walk_nvfp4_kernel<<<candidate_ids.ne[2], 32, 0, stream>>>(args, edges);
++    }
++    CUDA_CHECK(cudaGetLastError());
++}
++
++void candidate_selector_path_nvfp4_dispatch(const Tensor& candidate_ids, const Tensor& unary_scores,
++                                            const Tensor& projected_hidden, const Tensor& anchors,
++                                            const Weight& predecessor_codebook,
++                                            const Weight& successor_codebook,
++                                            const Tensor& base_positions,
++                                            const SamplingConfig* configs, Tensor& drafts,
++                                            Tensor& proposal_q, WorkspaceArena& workspace,
++                                            cudaStream_t stream, Tensor* confidence) {
++    const auto route = candidate_selector_path_route(candidate_ids.ne[1], candidate_ids.ne[2]);
++    auto scope       = workspace.scope();
++    const auto scratch =
++        allocate_selector_workspace(workspace, route, candidate_ids.ne[1], candidate_ids.ne[2]);
++    if (scratch.edges.data != nullptr) {
++        const auto begin = reinterpret_cast<std::uintptr_t>(scratch.edges.data);
++        const auto end = begin + scratch.edges.bytes();
++        const auto overlap = [&](const void* ptr, std::size_t bytes) {
++            const auto at = reinterpret_cast<std::uintptr_t>(ptr);
++            return ptr && begin < at + bytes && at < end;
++        };
++        for (const Tensor* t : {&candidate_ids, &unary_scores, &projected_hidden, &anchors,
++                                &base_positions, static_cast<const Tensor*>(&drafts),
++                                static_cast<const Tensor*>(&proposal_q),
++                                static_cast<const Tensor*>(confidence)})
++            if (t && overlap(t->data, t->bytes()))
++                throw std::invalid_argument("selector workspace overlaps an operand");
++        for (const Weight* w : {&predecessor_codebook, &successor_codebook})
++            if (overlap(w->qdata, w->payload_bytes))
++                throw std::invalid_argument("selector workspace overlaps a codebook");
++        if (overlap(configs, candidate_ids.ne[2] * sizeof(SamplingConfig)))
++            throw std::invalid_argument("selector workspace overlaps configs");
++    }
++    candidate_selector_path_nvfp4_launch(route, candidate_ids, unary_scores, projected_hidden,
++                                         anchors, predecessor_codebook, successor_codebook,
++                                         base_positions, configs, drafts, proposal_q, scratch,
++                                         stream, confidence);
++}
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.h b/src/ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.h
+new file mode 100644
+index 0000000..07ca8d4
+--- /dev/null
++++ b/src/ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++#include "ops/candidate_selector/bf16/candidate_selector_path_plan.h"
++#include "core/weight.h"
++
++namespace ninfer::ops::detail {
++
++// Weight-only NVFP4 codebook route of the selector walk; see the BF16 family for the route
++// structure and the shared SelectorWorkspace contract.
++void candidate_selector_path_nvfp4_dispatch(const Tensor& candidate_ids, const Tensor& unary_scores,
++                                            const Tensor& projected_hidden, const Tensor& anchors,
++                                            const Weight& predecessor_codebook,
++                                            const Weight& successor_codebook,
++                                            const Tensor& base_positions,
++                                            const SamplingConfig* configs, Tensor& drafts,
++                                            Tensor& proposal_q, WorkspaceArena& workspace,
++                                            cudaStream_t stream, Tensor* confidence = nullptr);
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/candidate_selector/sources.cmake b/src/ops/candidate_selector/sources.cmake
+index 0bee6b4..7821274 100644
+--- a/src/ops/candidate_selector/sources.cmake
++++ b/src/ops/candidate_selector/sources.cmake
+@@ -3,4 +3,5 @@ target_sources(ninfer_ops PRIVATE
+   "${CMAKE_CURRENT_LIST_DIR}/bf16/candidate_selector_path_plan.cpp"
+   "${CMAKE_CURRENT_LIST_DIR}/topk/candidate_topk.cu"
+   "${CMAKE_CURRENT_LIST_DIR}/../wrapper/candidate_selector.cpp"
++  "${CMAKE_CURRENT_LIST_DIR}/nvfp4/candidate_selector_path_nvfp4.cu"
+ )
+diff --git a/src/ops/context_kv_materialize/context_kv_common.cuh b/src/ops/context_kv_materialize/context_kv_common.cuh
+new file mode 100644
+index 0000000..355e975
+--- /dev/null
++++ b/src/ops/context_kv_materialize/context_kv_common.cuh
+@@ -0,0 +1,110 @@
++#pragma once
++
++#include "core/qtype.h"
++
++// Shared device-side pieces of context_kv_materialize: the packed-column mapping, the per-layer
++// weight/cache view, the fused key head store, and the key post-processing kernel entry. Both
++// the W8 and NVFP4 projection kernels consume them; the view's code/scale pointers are raw and
++// interpreted per weight format.
++
++#include "core/tensor.h"
++#include "ninfer/ops/context_kv_materialize.h"
++#include "ops/common/dflash_rope.cuh"
++#include "ops/common/warp.cuh"
++
++#include <cuda_bf16.h>
++#include <cuda_fp16.h>
++
++#include <array>
++#include <cstdint>
++
++#include <cuda_runtime.h>
++
++namespace ninfer::ops::detail {
++
++constexpr int kContextKVRows    = 1024;
++constexpr int kContextKVHeadDim = 128;
++
++__device__ __forceinline__ int context_column(int column, int width, int prefix) {
++    return width == prefix ? column : column / prefix * width + column % prefix;
++}
++
++union alignas(16) ContextKVBf16x8 {
++    uint4 raw;
++    __nv_bfloat162 pair[4];
++};
++
++__device__ __forceinline__ int swizzle_128(int row, int column) {
++    return (((column >> 3) ^ (row & 7)) << 3) | (column & 7);
++}
++
++struct DeviceLayerView {
++    const std::uint8_t* key_codes;
++    const std::uint8_t* key_scales;
++    const std::uint8_t* value_codes;
++    const std::uint8_t* value_scales;
++    float key_inverse_divisor;
++    float value_inverse_divisor;
++    const __nv_bfloat16* key_norm;
++    __nv_bfloat16* cache_k;
++    __nv_bfloat16* cache_v;
++    std::int32_t padded_capacity;
++};
++
++struct DeviceLayers {
++    DeviceLayerView layer[kContextKVMaterializeLayers];
++};
++
++__device__ __forceinline__ void store_key_head(const float* input, DeviceLayerView layer,
++                                               const int* positions, const int* slots, int column,
++                                               int width, int head) {
++    const int lane = threadIdx.x & 31;
++    const int j    = lane * 2;
++    float x0 = input[j], x1 = input[j + 1], y0 = input[j + 64], y1 = input[j + 65];
++    float sum         = warp_reduce_sum(x0 * x0 + x1 * x1 + y0 * y0 + y1 * y1);
++    const float inverse = rsqrtf(__shfl_sync(0xffffffffU, sum, 0) / 128.0f + 1.e-6f);
++    x0 *= inverse * __bfloat162float(layer.key_norm[j]);
++    x1 *= inverse * __bfloat162float(layer.key_norm[j + 1]);
++    y0 *= inverse * __bfloat162float(layer.key_norm[j + 64]);
++    y1 *= inverse * __bfloat162float(layer.key_norm[j + 65]);
++    float sin0, cos0, sin1, cos1;
++    dflash_rope_sincos(positions, column, j, &sin0, &cos0);
++    dflash_rope_sincos(positions, column, j + 1, &sin1, &cos1);
++    const auto dst = 128LL * ((positions[column] & 2047) + (long long)layer.padded_capacity *
++                                                               (head + 8 * slots[column / width]));
++    auto* out      = reinterpret_cast<__nv_bfloat162*>(layer.cache_k + dst);
++    out[lane]      = __floats2bfloat162_rn(x0 * cos0 - y0 * sin0, x1 * cos1 - y1 * sin1);
++    out[lane + 32] = __floats2bfloat162_rn(y0 * cos0 + x0 * sin0, y1 * cos1 + x1 * sin1);
++}
++
++inline DeviceLayers make_device_layers(
++    const std::array<ContextKVMaterializeLayerView, kContextKVMaterializeLayers>& layers) {
++    DeviceLayers result{};
++    for (int index = 0; index < static_cast<int>(kContextKVMaterializeLayers); ++index) {
++        const ContextKVMaterializeLayerView& source = layers[static_cast<std::size_t>(index)];
++        const auto inverse = [](const Weight& weight) {
++            return weight.qtype == QType::NVFP4 ? 1.0F / weight.weight_scale_divisor : 1.0F;
++        };
++        result.layer[index] = {
++            static_cast<const std::uint8_t*>(source.key_weight.qdata),
++            static_cast<const std::uint8_t*>(source.key_weight.scales),
++            static_cast<const std::uint8_t*>(source.value_weight.qdata),
++            static_cast<const std::uint8_t*>(source.value_weight.scales),
++            inverse(source.key_weight),
++            inverse(source.value_weight),
++            static_cast<const __nv_bfloat16*>(source.key_norm_weight.data),
++            static_cast<__nv_bfloat16*>(source.cache.k.data),
++            static_cast<__nv_bfloat16*>(source.cache.v.data),
++            static_cast<std::int32_t>(source.cache.padded_capacity),
++        };
++    }
++    return result;
++}
++
++void context_kv_key_post_launch(const Tensor& key_scratch, const Tensor& positions,
++                                const Tensor& counts, const Tensor& state_slots,
++                                const DeviceLayers& layers, std::int32_t batch_size,
++                                std::int32_t width,
++                                ContextKVMaterializeExecutionEnvelope envelope, cudaStream_t stream);
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/context_kv_materialize/context_kv_key_post.cu b/src/ops/context_kv_materialize/context_kv_key_post.cu
+new file mode 100644
+index 0000000..14248aa
+--- /dev/null
++++ b/src/ops/context_kv_materialize/context_kv_key_post.cu
+@@ -0,0 +1,48 @@
++// Format-neutral key post-processing of context_kv_materialize: RMSNorm + DFlash rope over the
++// FP32 key scratch and the store into the cyclic cache. Shared by every weight format.
++#include "ops/context_kv_materialize/context_kv_common.cuh"
++
++#include "core/device.h"
++
++namespace ninfer::ops::detail {
++namespace {
++
++__global__ __launch_bounds__(256) void context_kv_key_post_kernel(
++    const float* __restrict__ key_scratch, const std::int32_t* __restrict__ positions,
++    const std::int32_t* __restrict__ counts, const std::int32_t* __restrict__ state_slots,
++    DeviceLayers layers, std::int32_t batch_size, std::int32_t width, std::int32_t min_count,
++    std::int32_t max_count) {
++    const int packed_column   = static_cast<int>(blockIdx.x);
++    const int physical_column = context_column(packed_column, width, max_count);
++    const int layer_index     = static_cast<int>(blockIdx.y);
++    const int batch           = physical_column / width;
++    const int local           = physical_column % width;
++    const int count           = counts[batch];
++    if (count < min_count || count > max_count || local >= count) return;
++    const auto layer   = layers.layer[layer_index];
++    const int head     = threadIdx.x >> 5;
++    const float* input = key_scratch +
++                         kContextKVRows * (packed_column + max_count * batch_size * layer_index) +
++                         head * kContextKVHeadDim;
++    store_key_head(input, layer, positions, state_slots, physical_column, width, head);
++}
++
++} // namespace
++
++void context_kv_key_post_launch(const Tensor& key_scratch, const Tensor& positions,
++                                const Tensor& counts, const Tensor& state_slots,
++                                const DeviceLayers& layers, std::int32_t batch_size,
++                                std::int32_t width,
++                                ContextKVMaterializeExecutionEnvelope envelope,
++                                cudaStream_t stream) {
++    context_kv_key_post_kernel<<<dim3(envelope.max_count * batch_size,
++                                       static_cast<unsigned>(kContextKVMaterializeLayers)),
++                                 256, 0, stream>>>(
++        static_cast<const float*>(key_scratch.data), static_cast<const int*>(positions.data),
++        static_cast<const int*>(counts.data), static_cast<const int*>(state_slots.data), layers,
++        batch_size, width, static_cast<std::int32_t>(envelope.min_count),
++        static_cast<std::int32_t>(envelope.max_count));
++    CUDA_CHECK(cudaGetLastError());
++}
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/context_kv_materialize/context_kv_materialize.cpp b/src/ops/context_kv_materialize/context_kv_materialize.cpp
+index a04cc2a..d81836b 100644
+--- a/src/ops/context_kv_materialize/context_kv_materialize.cpp
++++ b/src/ops/context_kv_materialize/context_kv_materialize.cpp
+@@ -7,6 +7,7 @@
+ #include "ops/kv_cache/d256_profile.h"
+ 
+ #include <algorithm>
++#include <cmath>
+ #include <cstddef>
+ #include <cstdint>
+ #include <limits>
+@@ -37,6 +38,28 @@ void require_tensor(const Tensor& tensor, DType dtype, std::int32_t n0, std::int
+ }
+ 
+ void require_weight(const Weight& weight, const char* name) {
++    if (weight.qtype == QType::NVFP4) {
++        // The NVFP4 key/value parents are 128-row-aligned slices of the draft module's packed
++        // query_key_value payload: the code and scale planes keep the registered arrangement but
++        // no longer sit at the canonical single-payload offsets, so the geometry is checked here
++        // instead of validate_nvfp4_weight.
++        constexpr std::uint64_t kCodeBytes =
++            static_cast<std::uint64_t>(kKVSize) * static_cast<std::uint64_t>(kHidden / 2);
++        constexpr std::uint64_t kScaleBytes =
++            static_cast<std::uint64_t>(kKVSize) * static_cast<std::uint64_t>(kHidden / 16);
++        if (weight.layout != QuantLayout::BlockScaleK16M128x4 ||
++            weight.scale_dtype != DType::FP8_E4M3FN || weight.group != 16 ||
++            weight.group_size != 16 || weight.ndim != 2 || weight.n != kKVSize ||
++            weight.k != kHidden || weight.shape[0] != kKVSize || weight.shape[1] != kHidden ||
++            weight.qhigh != nullptr || weight.high_plane_bytes != 0 ||
++            weight.payload_bytes < kCodeBytes + kScaleBytes + sizeof(float) ||
++            !aligned_to(weight.qdata, 16) || !aligned_to(weight.scales, 16) ||
++            weight.scales < weight.qdata ||
++            !std::isfinite(weight.weight_scale_divisor) || weight.weight_scale_divisor <= 0.0F) {
++            throw std::invalid_argument(std::string(kOp) + ": invalid " + name);
++        }
++        return;
++    }
+     constexpr std::uint64_t kCodeBytes =
+         static_cast<std::uint64_t>(kKVSize) * static_cast<std::uint64_t>(kHidden);
+     constexpr std::uint64_t kScaleBytes =
+@@ -167,6 +190,11 @@ void context_kv_materialize(
+     Tensor key_scratch;
+     if (detail::context_kv_materialize_uses_scratch(route))
+         key_scratch = allocate_key_scratch(workspace, columns);
++    if (layers.front().key_weight.qtype == QType::NVFP4) {
++        detail::context_kv_materialize_nvfp4_launch(context, positions, counts, state_slots,
++                                                    layers, envelope, route, key_scratch, stream);
++        return;
++    }
+     detail::context_kv_materialize_launch(context, positions, counts, state_slots, layers, envelope,
+                                           route, key_scratch, stream);
+ }
+diff --git a/src/ops/context_kv_materialize/launch.h b/src/ops/context_kv_materialize/launch.h
+index 7194cd4..bb5a5b5 100644
+--- a/src/ops/context_kv_materialize/launch.h
++++ b/src/ops/context_kv_materialize/launch.h
+@@ -37,4 +37,12 @@ void context_kv_materialize_launch(
+     ContextKVMaterializeExecutionEnvelope envelope, ContextKVMaterializeRoute route,
+     const Tensor& key_scratch, cudaStream_t stream);
+ 
++// NVFP4 key/value parents: one MMA family serves every routed column count with the same
++// envelope filtering, key scratch, and cache stores as the W8 launch.
++void context_kv_materialize_nvfp4_launch(
++    const Tensor& context, const Tensor& positions, const Tensor& counts, const Tensor& state_slots,
++    const std::array<ContextKVMaterializeLayerView, kContextKVMaterializeLayers>& layers,
++    ContextKVMaterializeExecutionEnvelope envelope, ContextKVMaterializeRoute route,
++    const Tensor& key_scratch, cudaStream_t stream);
++
+ } // namespace ninfer::ops::detail
+diff --git a/src/ops/context_kv_materialize/materialize_nvfp4.cu b/src/ops/context_kv_materialize/materialize_nvfp4.cu
+new file mode 100644
+index 0000000..786a67c
+--- /dev/null
++++ b/src/ops/context_kv_materialize/materialize_nvfp4.cu
+@@ -0,0 +1,324 @@
++// NVFP4 projection kernels of context_kv_materialize: the weight-only NVFP4 [1024,5120]
++// key/value parents (row slices of the draft module's query_key_value payload). One MMA family
++// serves every column count: e2m1 codes stage raw and decode to exactly-representable BF16, the
++// stored E4M3 scales apply in FP32 per 16-value group after each group's MMA accumulation, and
++// the payload divisor folds into the captured scales. The activation staging, envelope filtering,
++// key scratch, and cache stores are shared with the W8 family through context_kv_common.cuh.
++#include "ops/context_kv_materialize/launch.h"
++#include "core/device.h"
++#include "ops/common/memory.cuh"
++#include "ops/common/mma.cuh"
++#include "ops/context_kv_materialize/context_kv_common.cuh"
++#include "ops/linear/nvfp4/nvfp4_codec.cuh"
++#include <cuda_bf16.h>
++#include <cuda_fp16.h>
++
++namespace ninfer::ops::detail {
++namespace {
++
++constexpr int kHidden = 5120, kRows = kContextKVRows, kHeadDim = kContextKVHeadDim;
++
++template <int Rows, int Columns, int BlockK>
++union alignas(16) MaterializeNvfp4Storage {
++    struct {
++        __nv_bfloat16 code_values[Rows][BlockK];
++        __nv_bfloat16 activations[Columns][BlockK];
++        std::uint8_t codes[Rows][BlockK / 2];
++        std::uint8_t scales[Rows][BlockK / 16];
++    } mainloop;
++
++    float scores[Columns][Rows];
++};
++
++template <int Rows, int Columns, int BlockK, int ColumnWarps>
++__global__ __launch_bounds__(Rows / 16 * ColumnWarps * 32, 1) void context_kv_mma_nvfp4_kernel(
++    const __nv_bfloat16* hidden, const int* positions, const int* counts, const int* slots,
++    DeviceLayers layers, float* key_scratch, int width, int batch, int min_count, int max_count) {
++    constexpr int kBlockRows = Rows, kBlockK = BlockK;
++    constexpr int kBlockColumns = Columns;
++    constexpr int kColumnWarps  = ColumnWarps;
++    constexpr int kWarps = Rows / 16 * kColumnWarps, kThreads = kWarps * 32;
++    constexpr int kWarpColumns = Columns / kColumnWarps, kTokenMmas = kWarpColumns / 8;
++    constexpr int kKTiles = kHidden / kBlockK;
++    constexpr int kGroupsPerTile = kBlockK / 16;
++    static_assert((Rows == 64 || Rows == 128) && Columns % (8 * ColumnWarps) == 0);
++    static_assert(kHidden % kBlockK == 0 && kThreads <= 1024);
++    static_assert((kBlockK % 16) == 0 && kBlockK <= 128);
++    const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
++    const int warp_row = warp / kColumnWarps, warp_col = warp % kColumnWarps;
++    const int gid = lane >> 2, lid = lane & 3;
++    const int a_matrix = lane >> 3, a_rowoff = (lane & 7) + ((a_matrix & 1) << 3);
++    const int a_coloff = (a_matrix >> 1) << 3, b_row = lane & 7, b_coloff = ((lane >> 3) & 1) << 3;
++    const int column_begin = blockIdx.y * Columns,
++              live_columns = min(Columns, max_count * batch - column_begin);
++    const int row_begin = blockIdx.x * Rows, layer_index = blockIdx.z >> 1;
++    const bool value          = (blockIdx.z & 1) != 0;
++    const auto layer          = layers.layer[layer_index];
++    const auto* weight_codes  = value ? layer.value_codes : layer.key_codes;
++    const auto* weight_scales = value ? layer.value_scales : layer.key_scales;
++    const float inverse_divisor = value ? layer.value_inverse_divisor : layer.key_inverse_divisor;
++    extern __shared__ __align__(16) unsigned char shared_bytes[];
++    auto& storage  = *reinterpret_cast<MaterializeNvfp4Storage<Rows, Columns, BlockK>*>(shared_bytes);
++    auto& mainloop = storage.mainloop;
++    {
++        float accumulators[kTokenMmas][4] = {};
++
++        const auto stage_activation = [&](int k_tile) {
++            const int k_begin    = k_tile * kBlockK;
++            constexpr int kItems = kBlockColumns * (kBlockK / 8);
++            for (int item = tid; item < kItems; item += kThreads) {
++                const int column  = item / (kBlockK / 8);
++                const int k8      = item - column * (kBlockK / 8);
++                auto* destination = &mainloop.activations[column][swizzle_128(column, k8 * 8)];
++                if (column < live_columns) {
++                    cp_async<16, Cache::ca>(
++                        destination,
++                        hidden +
++                            static_cast<std::int64_t>(context_column(column_begin + column, width,
++                                                                    max_count)) *
++                                kHidden +
++                            k_begin + k8 * 8);
++                } else {
++                    cp_async_zfill<16, Cache::ca>(destination, hidden + k_begin + k8 * 8, 0);
++                }
++            }
++        };
++
++        const auto stage_weight = [&](int k_tile) {
++            const int k_begin     = k_tile * kBlockK;
++            constexpr int kChunks = kBlockRows * (kBlockK / 32);
++            for (int item = tid; item < kChunks; item += kThreads) {
++                const int local_row = item / (kBlockK / 32);
++                const int chunk     = item - local_row * (kBlockK / 32);
++                cp_async<16, Cache::cg>(
++                    &mainloop.codes[local_row][chunk * 16],
++                    weight_codes + static_cast<std::int64_t>(row_begin + local_row) * (kHidden / 2) +
++                        k_begin / 2 + chunk * 16);
++            }
++            // The scale plane is the registered K16M128x4 blocked arrangement: each k-tile's
++            // groups span BlockK/64 consecutive 512-byte tiles, four group bytes per row and tile.
++            for (int local_row = tid; local_row < kBlockRows; local_row += kThreads) {
++                const int row       = row_begin + local_row;
++                const int in_tile   = (row % 32) * 16 + ((row % 128) / 32) * 4;
++                const std::int64_t tile_base =
++                    static_cast<std::int64_t>(row / 128) * (kHidden / 64) + k_begin / 64;
++#pragma unroll
++                for (int half = 0; half < kBlockK / 64; ++half) {
++                    cp_async<4>(&mainloop.scales[local_row][half * 4],
++                                weight_scales + (tile_base + half) * 512 + in_tile);
++                }
++            }
++        };
++
++        // E2M1 magnitudes are exactly representable in BF16; decode pairs straight to registers
++        // and keep the stored E4M3 scale application in FP32.
++        const auto decode_e2m1_codes = [&]() {
++            constexpr int kChunksPerRow = kBlockK / 32;
++            for (int item = tid; item < kBlockRows * kChunksPerRow; item += kThreads) {
++                const int row      = item / kChunksPerRow;
++                const int chunk    = item - row * kChunksPerRow;
++                const int col      = chunk * 32;
++                const uint4 packed = *reinterpret_cast<const uint4*>(&mainloop.codes[row][col / 2]);
++                ContextKVBf16x8 decoded[4];
++                const unsigned words[4] = {packed.x, packed.y, packed.z, packed.w};
++#pragma unroll
++                for (int word = 0; word < 4; ++word) {
++#pragma unroll
++                    for (int byte = 0; byte < 4; ++byte) {
++                        const float2 values = decode_nvfp4_e2m1x2(
++                            static_cast<std::uint8_t>((words[word] >> (byte * 8)) & 0xffu));
++                        decoded[word].pair[byte] =
++                            __floats2bfloat162_rn(values.x, values.y);
++                    }
++                }
++#pragma unroll
++                for (int vec = 0; vec < 4; ++vec) {
++                    store_vec(&mainloop.code_values[row][swizzle_128(row, col + vec * 8)],
++                              decoded[vec].raw);
++                }
++            }
++        };
++
++        stage_activation(0);
++        stage_weight(0);
++        cp_commit();
++
++#pragma unroll 1
++        for (int k_tile = 0; k_tile < kKTiles; ++k_tile) {
++            cp_wait<0>();
++            __syncthreads();
++            decode_e2m1_codes();
++            __syncthreads();
++
++            // Capture the group scales (with the payload divisor folded in) before the next
++            // async weight stage reuses their shared plane.
++            float top_scales[kGroupsPerTile], bottom_scales[kGroupsPerTile];
++#pragma unroll
++            for (int g = 0; g < kGroupsPerTile; ++g) {
++                top_scales[g] = decode_nvfp4_e4m3(mainloop.scales[warp_row * 16 + gid][g]) *
++                                inverse_divisor;
++                bottom_scales[g] =
++                    decode_nvfp4_e4m3(mainloop.scales[warp_row * 16 + gid + 8][g]) * inverse_divisor;
++            }
++            __syncthreads();
++            const int next = k_tile + 1;
++            if (next < kKTiles) {
++                stage_weight(next);
++                cp_commit();
++            }
++
++            const auto load_fragments = [&](int k_step, unsigned(&a)[4],
++                                            unsigned(&b)[kTokenMmas][2]) {
++                const int weight_row = warp_row * 16 + a_rowoff;
++                const int weight_col = k_step * 16 + a_coloff;
++                ldmatrix_x4(
++                    a[0], a[1], a[2], a[3],
++                    smem_addr(
++                        &mainloop.code_values[weight_row][swizzle_128(weight_row, weight_col)]));
++#pragma unroll
++                for (int token_mma = 0; token_mma < kTokenMmas; ++token_mma) {
++                    const int activation_row = warp_col * kWarpColumns + token_mma * 8 + b_row;
++                    const int activation_col = k_step * 16 + b_coloff;
++                    ldmatrix_x2(b[token_mma][0], b[token_mma][1],
++                                smem_addr(&mainloop.activations[activation_row][swizzle_128(
++                                    activation_row, activation_col)]));
++                }
++            };
++
++            unsigned a_fragments[4];
++            unsigned b_fragments[kTokenMmas][2];
++#pragma unroll
++            for (int group = 0; group < kGroupsPerTile; ++group) {
++                float group_acc[kTokenMmas][4] = {};
++                load_fragments(group, a_fragments, b_fragments);
++#pragma unroll
++                for (int t = 0; t < kTokenMmas; ++t)
++                    mma_bf16(group_acc[t][0], group_acc[t][1], group_acc[t][2], group_acc[t][3],
++                             a_fragments[0], a_fragments[1], a_fragments[2], a_fragments[3],
++                             b_fragments[t][0], b_fragments[t][1]);
++#pragma unroll
++                for (int t = 0; t < kTokenMmas; ++t) {
++                    accumulators[t][0] =
++                        fmaf(group_acc[t][0], top_scales[group], accumulators[t][0]);
++                    accumulators[t][1] =
++                        fmaf(group_acc[t][1], top_scales[group], accumulators[t][1]);
++                    accumulators[t][2] =
++                        fmaf(group_acc[t][2], bottom_scales[group], accumulators[t][2]);
++                    accumulators[t][3] =
++                        fmaf(group_acc[t][3], bottom_scales[group], accumulators[t][3]);
++                }
++            }
++
++            if (next < kKTiles) {
++                __syncthreads();
++                stage_activation(next);
++                cp_commit();
++            }
++        }
++
++        __syncthreads();
++        auto& scores         = storage.scores;
++        const int local_row0 = warp_row * 16 + gid;
++        const int local_row1 = local_row0 + 8;
++#pragma unroll
++        for (int token_mma = 0; token_mma < kTokenMmas; ++token_mma) {
++            const int column0 = warp_col * kWarpColumns + token_mma * 8 + 2 * lid;
++            if (column0 < Columns) {
++                scores[column0][local_row0] = accumulators[token_mma][0];
++                scores[column0][local_row1] = accumulators[token_mma][2];
++            }
++            if (column0 + 1 < Columns) {
++                scores[column0 + 1][local_row0] = accumulators[token_mma][1];
++                scores[column0 + 1][local_row1] = accumulators[token_mma][3];
++            }
++        }
++    }
++    __syncthreads();
++    for (int local = warp; local < live_columns; local += kWarps) {
++        const int packed_column = column_begin + local;
++        const int column        = context_column(packed_column, width, max_count);
++        const int request       = column / width;
++        const int count         = counts[request];
++        if (count < min_count || count > max_count || column % width >= count) continue;
++        if constexpr (Rows == 128) {
++            if (!value) {
++                store_key_head(storage.scores[local], layer, positions, slots, column, width,
++                               row_begin / 128);
++                continue;
++            }
++        }
++        for (int r = lane; r < Rows; r += 32) {
++            const int row      = row_begin + r;
++            const float result = storage.scores[local][r];
++            if (!value) {
++                key_scratch[row + 1024LL * (packed_column + max_count * batch * layer_index)] =
++                    result;
++            } else {
++                const auto dst     = row % 128 + 128LL * ((positions[column] & 2047) +
++                                                      (long long)layer.padded_capacity *
++                                                          (row / 128 + 8 * slots[request]));
++                layer.cache_v[dst] = __float2bfloat16_rn(__bfloat162float(__float2bfloat16_rn(result)));
++            }
++        }
++    }
++}
++
++template <int Rows, int Columns, int BlockK, int ColumnWarps>
++void launch_mma(const Tensor& x, const Tensor& positions, const Tensor& counts, const Tensor& slots,
++                DeviceLayers layers, ContextKVMaterializeExecutionEnvelope envelope,
++                const Tensor& scratch, cudaStream_t stream) {
++    constexpr int bytes = sizeof(MaterializeNvfp4Storage<Rows, Columns, BlockK>);
++    if constexpr (bytes > 48 * 1024)
++        CUDA_CHECK(cudaFuncSetAttribute(
++            context_kv_mma_nvfp4_kernel<Rows, Columns, BlockK, ColumnWarps>,
++            cudaFuncAttributeMaxDynamicSharedMemorySize, bytes));
++    context_kv_mma_nvfp4_kernel<Rows, Columns, BlockK, ColumnWarps>
++        <<<dim3(kRows / Rows, (envelope.max_count * x.ne[2] + Columns - 1) / Columns, 10),
++           Rows / 16 * ColumnWarps * 32, bytes, stream>>>(
++            static_cast<const __nv_bfloat16*>(x.data), static_cast<const int*>(positions.data),
++            static_cast<const int*>(counts.data), static_cast<const int*>(slots.data), layers,
++            static_cast<float*>(scratch.data), x.ne[1], x.ne[2], envelope.min_count,
++            envelope.max_count);
++    CUDA_CHECK(cudaGetLastError());
++}
++
++} // namespace
++
++void context_kv_materialize_nvfp4_launch(
++    const Tensor& context, const Tensor& positions, const Tensor& counts, const Tensor& state_slots,
++    const std::array<ContextKVMaterializeLayerView, kContextKVMaterializeLayers>& layers,
++    ContextKVMaterializeExecutionEnvelope envelope, ContextKVMaterializeRoute route,
++    const Tensor& key_scratch, cudaStream_t stream) {
++    const DeviceLayers device_layers = make_device_layers(layers);
++    using Route                      = ContextKVMaterializeRoute;
++    // Every column count serves from the MMA family; the small-column grouped schedules of the
++    // W8 table land on the 32-column MMA tile.
++    switch (route) {
++    case Route::KSplit16:
++    case Route::KSplit24:
++    case Route::Mma32:
++        launch_mma<64, 32, 128, 2>(context, positions, counts, state_slots, device_layers,
++                                   envelope, key_scratch, stream);
++        break;
++    case Route::Mma80:
++        launch_mma<64, 80, 128, 5>(context, positions, counts, state_slots, device_layers,
++                                   envelope, key_scratch, stream);
++        break;
++    case Route::Mma96:
++        launch_mma<64, 96, 128, 6>(context, positions, counts, state_slots, device_layers,
++                                   envelope, key_scratch, stream);
++        break;
++    case Route::Fused64:
++        launch_mma<128, 64, 128, 2>(context, positions, counts, state_slots, device_layers,
++                                    envelope, key_scratch, stream);
++        return;
++    case Route::Mma64:
++        launch_mma<64, 64, 64, 2>(context, positions, counts, state_slots, device_layers,
++                                  envelope, key_scratch, stream);
++        break;
++    }
++    context_kv_key_post_launch(key_scratch, positions, counts, state_slots, device_layers,
++                               context.ne[2], context.ne[1], envelope, stream);
++}
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/context_kv_materialize/sources.cmake b/src/ops/context_kv_materialize/sources.cmake
+index 3bf352a..8abf5ce 100644
+--- a/src/ops/context_kv_materialize/sources.cmake
++++ b/src/ops/context_kv_materialize/sources.cmake
+@@ -1,4 +1,6 @@
+ target_sources(ninfer_ops PRIVATE
+   "${CMAKE_CURRENT_LIST_DIR}/context_kv_materialize.cpp"
+   "${CMAKE_CURRENT_LIST_DIR}/materialize.cu"
++  "${CMAKE_CURRENT_LIST_DIR}/context_kv_key_post.cu"
++  "${CMAKE_CURRENT_LIST_DIR}/materialize_nvfp4.cu"
+ )
+diff --git a/src/ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.cu b/src/ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.cu
+new file mode 100644
+index 0000000..d86d98d
+--- /dev/null
++++ b/src/ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.cu
+@@ -0,0 +1,53 @@
++// Format-neutral finish step of linear_dynamic_grouped_conv_add: applies the two-tap dynamic
++// convolution with the base kernel and finish delta to the materialized projection and
++// accumulates into the residual. Shared by every projection weight format.
++#include "ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.h"
++
++#include "core/device.h"
++
++#include <cuda_bf16.h>
++
++namespace ninfer::ops::detail {
++namespace {
++
++constexpr int kRows = 5120, kGroups = 320;
++
++__device__ __forceinline__ void finish_value(int row, int col, int width, float current,
++                                             float previous, const __nv_bfloat16* base,
++                                             const __nv_bfloat16* delta, __nv_bfloat16* residual) {
++    const int index = col * kRows + row, di = col * 2 * kGroups + row / 16;
++    float value = fmaf(__bfloat162float(base[2 * kRows + row]) + __bfloat162float(delta[di]),
++                       current, __bfloat162float(residual[index]));
++    if (col % width != 0)
++        value =
++            fmaf(__bfloat162float(base[3 * kRows + row]) + __bfloat162float(delta[di + kGroups]),
++                 previous, value);
++    residual[index] = __float2bfloat16_rn(value);
++}
++
++__global__ void finish_kernel(const __nv_bfloat16* projected, const __nv_bfloat16* base,
++                              const __nv_bfloat16* delta, __nv_bfloat16* residual, int width) {
++    const int row = blockIdx.x * blockDim.x + threadIdx.x, col = blockIdx.y;
++    if (row >= kRows) return;
++    const int index = col * kRows + row;
++    finish_value(row, col, width, __bfloat162float(projected[index]),
++                 col % width ? __bfloat162float(projected[index - kRows]) : 0.0f, base, delta,
++                 residual);
++}
++
++} // namespace
++
++void dynamic_grouped_conv_add_finish_launch(const Tensor& projected, const Tensor& base_kernel,
++                                            const Tensor& finish_delta, Tensor& residual,
++                                            cudaStream_t stream) {
++    const int tokens = residual.ne[1] * residual.ne[2];
++    const dim3 grid((kRows + 255) / 256, tokens);
++    finish_kernel<<<grid, 256, 0, stream>>>(
++        static_cast<const __nv_bfloat16*>(projected.data),
++        static_cast<const __nv_bfloat16*>(base_kernel.data),
++        static_cast<const __nv_bfloat16*>(finish_delta.data),
++        static_cast<__nv_bfloat16*>(residual.data), residual.ne[1]);
++    CUDA_CHECK(cudaGetLastError());
++}
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.h b/src/ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.h
+new file mode 100644
+index 0000000..e0545dc
+--- /dev/null
++++ b/src/ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.h
+@@ -0,0 +1,16 @@
++#pragma once
++
++#include "core/tensor.h"
++
++#include <cuda_runtime.h>
++
++namespace ninfer::ops::detail {
++
++// Finish step shared by every projection weight format of linear_dynamic_grouped_conv_add:
++// projected is the materialized BF16 [5120, width*batch] projection, and the kernel folds the
++// two-tap dynamic convolution into the residual in place.
++void dynamic_grouped_conv_add_finish_launch(const Tensor& projected, const Tensor& base_kernel,
++                                            const Tensor& finish_delta, Tensor& residual,
++                                            cudaStream_t stream);
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare.cu b/src/ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare.cu
+new file mode 100644
+index 0000000..bbd1420
+--- /dev/null
++++ b/src/ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare.cu
+@@ -0,0 +1,102 @@
++#include "ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare_plan.h"
++
++#include "core/device.h"
++#include "ninfer/ops/linear.h"
++#include "ninfer/ops/rmsnorm.h"
++#include "ops/dynamic_grouped_conv/dynamic_grouped_conv_add_finish.h"
++
++#include <cuda_bf16.h>
++
++#include <cstddef>
++#include <cstdint>
++
++namespace ninfer::ops::detail {
++namespace {
++
++constexpr int kHidden = 5120, kGroups = 320, kCoefficientRows = 1280;
++
++// The BF16 route keeps the projected coefficients in FP32 through the conv application; this
++// route reads them from the BF16 dynamic matrix the generic A16 linear materialized. The extra
++// coefficient rounding belongs to the NVFP4 route's implementation profile.
++template <int Capacity>
++__global__ __launch_bounds__(Capacity * 16, 4) void nvfp4_dynamic_grouped_conv_prepare_finish_kernel(
++    const __nv_bfloat16* base, const __nv_bfloat16* dynamic, __nv_bfloat16* prepared,
++    __nv_bfloat16* finish, int width, int batch_size) {
++    __shared__ float projected[4][Capacity];
++    __shared__ float normalized[Capacity][16];
++    const int tid = threadIdx.x, group = blockIdx.x, batch = blockIdx.y;
++    if (tid < 4 * Capacity && tid % Capacity < width) {
++        const int coefficient = tid / Capacity, position = tid % Capacity;
++        const int row          = coefficient * kGroups + group;
++        projected[coefficient][position] = __bfloat162float(
++            dynamic[(static_cast<std::int64_t>(batch) * width + position) * kCoefficientRows + row]);
++    }
++    const int position = tid / 16, channel = tid % 16, hidden = group * 16 + channel;
++    const std::int64_t offset = static_cast<std::int64_t>(batch * width + position) * kHidden + hidden;
++    if (position < width) { normalized[position][channel] = __bfloat162float(prepared[offset]); }
++    __syncthreads();
++    if (tid < 2 * Capacity && tid % Capacity < width) {
++        const int tap = tid / Capacity, pos = tid % Capacity;
++        finish[((batch * width + pos) * 2 + tap) * kGroups + group] =
++            __float2bfloat16_rn(projected[2 + tap][pos]);
++    }
++    if (position < width) {
++        float value = (__bfloat162float(base[hidden]) + projected[0][position]) *
++                      normalized[position][channel];
++        if (position > 0)
++            value = fmaf(__bfloat162float(base[kHidden + hidden]) + projected[1][position],
++                         normalized[position - 1][channel], value);
++        prepared[offset] = __float2bfloat16_rn(value);
++    }
++}
++
++void launch_finish(const Tensor& base, const Tensor& dynamic, Tensor& prepared, Tensor& finish,
++                   cudaStream_t stream) {
++    const dim3 grid(kGroups, prepared.ne[2]);
++    if (prepared.ne[1] <= 8) {
++        nvfp4_dynamic_grouped_conv_prepare_finish_kernel<8>
++            <<<grid, 8 * 16, 0, stream>>>(
++                static_cast<const __nv_bfloat16*>(base.data),
++                static_cast<const __nv_bfloat16*>(dynamic.data),
++                static_cast<__nv_bfloat16*>(prepared.data),
++                static_cast<__nv_bfloat16*>(finish.data), prepared.ne[1], prepared.ne[2]);
++    } else {
++        nvfp4_dynamic_grouped_conv_prepare_finish_kernel<16>
++            <<<grid, 16 * 16, 0, stream>>>(
++                static_cast<const __nv_bfloat16*>(base.data),
++                static_cast<const __nv_bfloat16*>(dynamic.data),
++                static_cast<__nv_bfloat16*>(prepared.data),
++                static_cast<__nv_bfloat16*>(finish.data), prepared.ne[1], prepared.ne[2]);
++    }
++    CUDA_CHECK(cudaGetLastError());
++}
++
++} // namespace
++
++void nvfp4_dynamic_grouped_conv_prepare_dispatch(const Tensor& residual, const Tensor& norm,
++                                                float eps, const Tensor& base,
++                                                const Weight& kernel_projection, Tensor& prepared,
++                                                Tensor& finish_delta, WorkspaceArena& workspace,
++                                                cudaStream_t stream) {
++    auto scope       = workspace.scope();
++    const int tokens = residual.ne[1] * residual.ne[2];
++    Tensor dynamic   = workspace.alloc(DType::BF16, {kCoefficientRows, tokens});
++    rmsnorm(residual, norm, eps, false, prepared, stream);
++    linear(prepared.view({kHidden, tokens}), kernel_projection, dynamic, stream);
++    launch_finish(base, dynamic, prepared, finish_delta, stream);
++}
++
++void nvfp4_linear_dynamic_grouped_conv_add_dispatch(const Tensor& x, const Weight& projection,
++                                                    const Tensor& base_kernel,
++                                                    const Tensor& finish_delta, Tensor& residual,
++                                                    WorkspaceArena& workspace,
++                                                    cudaStream_t stream) {
++    auto scope       = workspace.scope();
++    const int tokens = x.ne[1] * x.ne[2];
++    Tensor projected = workspace.alloc(DType::BF16, {5120, tokens});
++    linear(x.view({x.ne[0], tokens}), projection, projected, stream);
++    dynamic_grouped_conv_add_finish_launch(projected, base_kernel, finish_delta, residual,
++                                           stream);
++}
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare_plan.h b/src/ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare_plan.h
+new file mode 100644
+index 0000000..e0bfe55
+--- /dev/null
++++ b/src/ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare_plan.h
+@@ -0,0 +1,34 @@
++#pragma once
++
++#include "core/weight.h"
++#include "core/arena.h"
++#include "core/tensor.h"
++
++#include <cuda_runtime.h>
++
++#include <cstddef>
++#include <cstdint>
++
++namespace ninfer::ops::detail {
++
++// NVFP4 route of rmsnorm_dynamic_grouped_conv_prepare: the kernel_projection parent is the
++// weight-only NVFP4 [1280,5120] matrix. The route materializes the dynamic coefficients in BF16
++// through the generic A16 linear and then applies the shared conv finish, so its transient
++// footprint (1280 x W x B BF16) stays below the split-K capacity the BF16 route reports.
++void nvfp4_dynamic_grouped_conv_prepare_dispatch(const Tensor& residual, const Tensor& norm,
++                                                float eps, const Tensor& base,
++                                                const Weight& kernel_projection, Tensor& prepared,
++                                                Tensor& finish_delta, WorkspaceArena& workspace,
++                                                cudaStream_t stream);
++
++// NVFP4 route of linear_dynamic_grouped_conv_add: the projection parent is the weight-only NVFP4
++// [5120,C] matrix (C in {4096,17408}). The route materializes the projection in BF16 through the
++// generic A16 linear and then applies the shared format-neutral finish; its transient footprint
++// matches the W8 route exactly.
++void nvfp4_linear_dynamic_grouped_conv_add_dispatch(const Tensor& x, const Weight& projection,
++                                                    const Tensor& base_kernel,
++                                                    const Tensor& finish_delta, Tensor& residual,
++                                                    WorkspaceArena& workspace,
++                                                    cudaStream_t stream);
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/dynamic_grouped_conv/sources.cmake b/src/ops/dynamic_grouped_conv/sources.cmake
+index 656ab6a..2376954 100644
+--- a/src/ops/dynamic_grouped_conv/sources.cmake
++++ b/src/ops/dynamic_grouped_conv/sources.cmake
+@@ -6,4 +6,6 @@ target_sources(ninfer_ops PRIVATE
+   "${CMAKE_CURRENT_LIST_DIR}/q8/q8_dynamic_grouped_conv_add_plan.cpp"
+   "${CMAKE_CURRENT_LIST_DIR}/projected/dynamic_grouped_conv_projected.cu"
+   "${CMAKE_CURRENT_LIST_DIR}/../wrapper/dynamic_grouped_conv.cpp"
++  "${CMAKE_CURRENT_LIST_DIR}/dynamic_grouped_conv_add_finish.cu"
++  "${CMAKE_CURRENT_LIST_DIR}/nvfp4/nvfp4_dynamic_grouped_conv_prepare.cu"
+ )
+diff --git a/src/ops/linear/nvfp4/nvfp4_dflash2_geometry.h b/src/ops/linear/nvfp4/nvfp4_dflash2_geometry.h
+new file mode 100644
+index 0000000..995ad86
+--- /dev/null
++++ b/src/ops/linear/nvfp4/nvfp4_dflash2_geometry.h
+@@ -0,0 +1,17 @@
++#pragma once
++// DFlash2 drafter matrix geometries for the NVFP4-encoded draft module, shared by the
++// fused attention-input route and the registered linear shapes.
++#include "ops/linear/nvfp4/nvfp4_geometry.h"
++
++namespace ninfer::ops::detail {
++
++using Nvfp4DFlash2FeatureGeometry  = Nvfp4Geometry<5120, 25600>;
++using Nvfp4DFlash2QkvGeometry      = Nvfp4Geometry<6144, 5120>;
++using Nvfp4DFlash2AttnOutGeometry  = Nvfp4Geometry<5120, 4096>;
++using Nvfp4DFlash2ConvProjGeometry = Nvfp4Geometry<1280, 5120>;
++using Nvfp4DFlash2SelectorGeometry = Nvfp4Geometry<256, 5120>;
++
++inline constexpr std::int32_t kNvfp4FirstSmallT = 2;
++inline constexpr std::int32_t kNvfp4LastSmallT  = 32;
++
++} // namespace ninfer::ops::detail
+diff --git a/src/ops/linear/nvfp4/nvfp4_output.cuh b/src/ops/linear/nvfp4/nvfp4_output.cuh
+index bcf5aa6..9218c35 100644
+--- a/src/ops/linear/nvfp4/nvfp4_output.cuh
++++ b/src/ops/linear/nvfp4/nvfp4_output.cuh
+@@ -36,4 +36,28 @@ struct Nvfp4ContiguousOutput {
+     }
+ };
+ 
++// Three-destination split for parents whose rows partition into query, key, and value segments.
++// Row-group vectors never straddle a segment boundary when both row counts are multiples of eight.
++template <std::int32_t QueryRows, std::int32_t KvRows>
++struct Nvfp4SplitOutput3 {
++    __nv_bfloat16* query;
++    __nv_bfloat16* key;
++    __nv_bfloat16* value;
++    static_assert((QueryRows % 8) == 0 && (KvRows % 8) == 0);
++
++    __device__ __forceinline__ void store(std::int32_t parent_row, std::int32_t token,
++                                          float result) const {
++        if (parent_row < QueryRows) {
++            query[static_cast<std::int64_t>(token) * QueryRows + parent_row] =
++                __float2bfloat16_rn(result);
++        } else if (parent_row < QueryRows + KvRows) {
++            key[static_cast<std::int64_t>(token) * KvRows + parent_row - QueryRows] =
++                __float2bfloat16_rn(result);
++        } else {
++            value[static_cast<std::int64_t>(token) * KvRows + parent_row - QueryRows - KvRows] =
++                __float2bfloat16_rn(result);
++        }
++    }
++};
++
+ } // namespace ninfer::ops::detail
+diff --git a/src/ops/weight_input.cpp b/src/ops/weight_input.cpp
+index 1d12529..4d8fa84 100644
+--- a/src/ops/weight_input.cpp
++++ b/src/ops/weight_input.cpp
+@@ -265,8 +265,12 @@ SingleProjectionWeight prepare_attn_input_proj_weights(const WeightInput& query,
+             "QKV input projection: unsupported logical geometry");
+     const std::array inputs{query, key, value};
+     auto result = single(inputs);
+-    require(result.weight.qtype == QType::Q8_G32_FP16,
+-            "QKV input projection: native form requires Q8");
++    // The three-output native family is the fused Q8 row-split parent; the NVFP4-encoded
++    // DFlash2 module carries the same [query, key, value] rows as a BlockScaleK16M128x4
++    // parent served by the nvfp4 attention-input route.
++    require(result.weight.qtype == QType::Q8_G32_FP16 ||
++                (result.weight.qtype == QType::NVFP4 && q == std::vector<std::uint64_t>{4096, 5120}),
++            "QKV input projection: native form requires Q8 or the DFlash2 NVFP4 parent");
+     return result;
+ }
+ 
+diff --git a/src/ops/wrapper/attn_input_proj.cpp b/src/ops/wrapper/attn_input_proj.cpp
+index 318f0c1..aabf29f 100644
+--- a/src/ops/wrapper/attn_input_proj.cpp
++++ b/src/ops/wrapper/attn_input_proj.cpp
+@@ -620,6 +620,17 @@ void attn_input_proj(const Tensor& x, const Weight& query_key_value_weight, Tens
+     require_matrix(q, kQRows, cols, "q");
+     require_matrix(k, kKvRows, cols, "k");
+     require_matrix(v, kKvRows, cols, "v");
++
++    if (query_key_value_weight.qtype == QType::NVFP4) {
++        if (hidden != 5120 || query_key_value_weight.n != kRows ||
++            query_key_value_weight.k != hidden) {
++            throw std::invalid_argument("attn_input_proj: unsupported NVFP4 Q/K/V profile");
++        }
++        (void)detail::validate_nvfp4_weight(query_key_value_weight, "attn_input_proj");
++        detail::nvfp4_dflash2_attn_input(x, query_key_value_weight, q, k, v, stream);
++        return;
++    }
++
+     require_q8_rowsplit(query_key_value_weight, kRows, hidden, "query/key/value weight");
+     if (sm70_direct_split(x, query_key_value_weight, {&q, &k, &v}, stream)) { return; }
+     detail::q8_attn_input_dispatch(x, query_key_value_weight, q, k, v, stream);
+diff --git a/src/ops/wrapper/candidate_selector.cpp b/src/ops/wrapper/candidate_selector.cpp
+index c48748f..ddff9af 100644
+--- a/src/ops/wrapper/candidate_selector.cpp
++++ b/src/ops/wrapper/candidate_selector.cpp
+@@ -2,6 +2,8 @@
+ 
+ #include "core/qtype.h"
+ #include "ops/candidate_selector/bf16/candidate_selector_path_plan.h"
++#include "ops/candidate_selector/nvfp4/candidate_selector_path_nvfp4.h"
++#include "ops/linear/nvfp4/nvfp4_format.h"
+ 
+ #include <array>
+ #include <cstddef>
+@@ -171,6 +173,60 @@ void candidate_selector_path(const Tensor& candidate_ids, const Tensor& unary_sc
+                              const Tensor& base_positions, const SamplingConfig* configs,
+                              Tensor& drafts, Tensor& proposal_q, WorkspaceArena& workspace,
+                              cudaStream_t stream, Tensor* confidence) {
++    if (predecessor_codebook.qtype == QType::BF16 || predecessor_codebook.qtype == QType::NVFP4) {
++        const auto native = [&](const Weight& weight, const char* label) {
++            if (weight.qtype != predecessor_codebook.qtype || weight.n != kCodebookRows ||
++                weight.k != kRank || weight.qdata == nullptr || weight.input_columns != nullptr)
++                throw std::invalid_argument(std::string("candidate_selector_path: invalid ") + label);
++            if (weight.qtype == QType::NVFP4) {
++                detail::validate_nvfp4_weight(weight, label);
++            } else if (weight.layout != QuantLayout::Contiguous || !aligned_to(weight.qdata, 16) ||
++                       weight.payload_bytes < std::size_t(kRank) * kCodebookRows * sizeof(std::uint16_t)) {
++                throw std::invalid_argument(std::string("candidate_selector_path: invalid ") + label);
++            }
++        };
++        native(predecessor_codebook, "predecessor_codebook");
++        native(successor_codebook, "successor_codebook");
++        const detail::SelectorCodebooks codebooks{predecessor_codebook.qdata, successor_codebook.qdata,
++                                                  predecessor_codebook.payload_bytes, false};
++        if (predecessor_codebook.qtype == QType::BF16) {
++            select_path(candidate_ids, unary_scores, projected_hidden, anchors, codebooks,
++                        base_positions, configs, drafts, proposal_q, confidence, workspace, stream);
++            return;
++        }
++        const int steps = candidate_ids.ne[1], batch = candidate_ids.ne[2];
++        if (steps < 1 || steps > 15 || batch < 1 || batch > 8)
++            throw std::invalid_argument("candidate_selector_path: invalid K/B");
++        require_tensor(candidate_ids, DType::I32, kCandidates, steps, batch, 1, "candidate_ids");
++        require_tensor(unary_scores, DType::FP32, kCandidates, steps, batch, 1, "unary_scores");
++        require_tensor(projected_hidden, DType::BF16, kRank, steps, batch, 1, "projected_hidden");
++        require_tensor(anchors, DType::I32, batch, 1, 1, 1, "anchors");
++        require_tensor(base_positions, DType::I32, batch, 1, 1, 1, "base_positions");
++        require_tensor(drafts, DType::I32, steps, batch, 1, 1, "drafts");
++        require_tensor(proposal_q, DType::FP32, kCandidates, steps, batch, 1, "proposal_q");
++        if (!aligned_to(configs, alignof(SamplingConfig)))
++            throw std::invalid_argument("candidate_selector_path: invalid configs");
++        require_nonoverlap(candidate_ids, unary_scores, projected_hidden, anchors, codebooks,
++                           base_positions, configs, drafts, proposal_q);
++        if (confidence != nullptr) {
++            require_tensor(*confidence, DType::FP32, steps, batch, 1, 1, "confidence");
++            const Range out{confidence->data, confidence->bytes(), "confidence"};
++            for (const Tensor* operand : {&candidate_ids, &unary_scores, &projected_hidden, &anchors,
++                                         &base_positions, static_cast<const Tensor*>(&drafts),
++                                         static_cast<const Tensor*>(&proposal_q)})
++                if (overlaps(out, Range{operand->data, operand->bytes(), "operand"}))
++                    throw std::invalid_argument("candidate_selector_path: confidence overlaps an operand");
++            for (const auto* weight : {&predecessor_codebook, &successor_codebook})
++                if (overlaps(out, Range{weight->qdata, weight->payload_bytes, "codebook"}))
++                    throw std::invalid_argument("candidate_selector_path: confidence overlaps a codebook");
++            if (overlaps(out, Range{configs, std::size_t(batch) * sizeof(SamplingConfig), "configs"}))
++                throw std::invalid_argument("candidate_selector_path: confidence overlaps configs");
++        }
++        detail::candidate_selector_path_nvfp4_dispatch(candidate_ids, unary_scores, projected_hidden,
++            anchors, predecessor_codebook, successor_codebook, base_positions, configs, drafts,
++            proposal_q, workspace, stream, confidence);
++        return;
++    }
+     require_q4_codebook(predecessor_codebook, "predecessor_codebook");
+     require_q4_codebook(successor_codebook, "successor_codebook");
+     const detail::SelectorCodebooks codebooks{predecessor_codebook.qdata,
+diff --git a/src/ops/wrapper/dynamic_grouped_conv.cpp b/src/ops/wrapper/dynamic_grouped_conv.cpp
+index 4e0f883..8b3dfca 100644
+--- a/src/ops/wrapper/dynamic_grouped_conv.cpp
++++ b/src/ops/wrapper/dynamic_grouped_conv.cpp
+@@ -3,7 +3,9 @@
+ #include "ninfer/ops/dynamic_grouped_conv.h"
+ 
+ #include "ops/dynamic_grouped_conv/bf16/bf16_dynamic_grouped_conv_prepare_plan.h"
++#include "ops/dynamic_grouped_conv/nvfp4/nvfp4_dynamic_grouped_conv_prepare_plan.h"
+ #include "ops/dynamic_grouped_conv/q8/q8_dynamic_grouped_conv_add_plan.h"
++#include "ops/linear/nvfp4/nvfp4_format.h"
+ 
+ #include <array>
+ #include <cmath>
+@@ -37,6 +39,13 @@ void require_tensor(const Tensor& tensor, DType dtype, std::int32_t d0, std::int
+ }
+ 
+ void require_kernel_projection_weight(const Weight& weight) {
++    if (weight.qtype == QType::NVFP4) {
++        if (weight.n != kCoefficientRows || weight.k != kHidden) {
++            throw std::invalid_argument(
++                "dynamic grouped conv prepare: invalid kernel_projection_weight");
++        }
++        return; // the full NVFP4 payload contract is validated by the linear route
++    }
+     constexpr std::uint64_t kPayloadBytes =
+         static_cast<std::uint64_t>(kCoefficientRows) * kHidden * sizeof(std::uint16_t);
+     if (weight.qtype != QType::BF16 || weight.layout != QuantLayout::Contiguous ||
+@@ -60,6 +69,13 @@ std::uint64_t required_q8_payload_bytes(std::int32_t input_rows) {
+ }
+ 
+ void require_finish_projection_weight(const Weight& weight, std::int32_t input_rows) {
++    if (weight.qtype == QType::NVFP4) {
++        if (weight.n != kHidden || weight.k != input_rows) {
++            throw std::invalid_argument(
++                "linear dynamic grouped conv add: invalid projection_weight");
++        }
++        return; // the full NVFP4 payload contract is validated by the linear route
++    }
+     const std::uint64_t payload_bytes = required_q8_payload_bytes(input_rows);
+     if (weight.qtype != QType::Q8_G32_FP16 || weight.layout != QuantLayout::RowSplit ||
+         weight.scale_dtype != DType::FP16 || weight.group_size != 32 || weight.group != 32 ||
+@@ -134,13 +150,15 @@ void require_nonoverlap(const Tensor& residual, const Tensor& norm_weight,
+                         const Tensor& base_kernel, const Weight& kernel_projection_weight,
+                         const Tensor& prepared, const Tensor& finish_delta,
+                         const WorkspaceArena& workspace) {
+-    constexpr std::size_t kWeightBytes =
+-        static_cast<std::size_t>(kCoefficientRows) * kHidden * sizeof(std::uint16_t);
++    const std::size_t weight_bytes =
++        kernel_projection_weight.qtype == QType::NVFP4
++            ? static_cast<std::size_t>(kernel_projection_weight.payload_bytes)
++            : static_cast<std::size_t>(kCoefficientRows) * kHidden * sizeof(std::uint16_t);
+     const std::array<Range, 7> ranges{{
+         {residual.data, residual.bytes(), "residual"},
+         {norm_weight.data, norm_weight.bytes(), "norm_weight"},
+         {base_kernel.data, base_kernel.bytes(), "base_kernel"},
+-        {kernel_projection_weight.qdata, kWeightBytes, "kernel_projection_weight"},
++        {kernel_projection_weight.qdata, weight_bytes, "kernel_projection_weight"},
+         {prepared.data, prepared.bytes(), "prepared"},
+         {finish_delta.data, finish_delta.bytes(), "finish_delta"},
+         {workspace.base(), workspace.capacity(), "workspace"},
+@@ -192,6 +210,14 @@ void rmsnorm_dynamic_grouped_conv_prepare(const Tensor& residual, const Tensor&
+     require_nonoverlap(residual, norm_weight, base_kernel, kernel_projection_weight, prepared,
+                        finish_delta, workspace);
+ 
++    if (kernel_projection_weight.qtype == QType::NVFP4) {
++        (void)detail::validate_nvfp4_weight(kernel_projection_weight, kPrepareOp);
++        detail::nvfp4_dynamic_grouped_conv_prepare_dispatch(residual, norm_weight, eps, base_kernel,
++                                                           kernel_projection_weight, prepared,
++                                                           finish_delta, workspace, stream);
++        return;
++    }
++
+     detail::bf16_dynamic_grouped_conv_prepare_dispatch(residual, norm_weight, eps, base_kernel,
+                                                        kernel_projection_weight, prepared,
+                                                        finish_delta, workspace, stream);
+@@ -236,6 +262,14 @@ void linear_dynamic_grouped_conv_add(const Tensor& x, const Weight& projection_w
+     require_finish_projection_weight(projection_weight, input_rows);
+     require_finish_nonoverlap(x, projection_weight, base_kernel, finish_delta, residual, workspace);
+ 
++    if (projection_weight.qtype == QType::NVFP4) {
++        (void)detail::validate_nvfp4_weight(projection_weight, kAddOp);
++        detail::nvfp4_linear_dynamic_grouped_conv_add_dispatch(x, projection_weight, base_kernel,
++                                                               finish_delta, residual, workspace,
++                                                               stream);
++        return;
++    }
++
+     detail::q8_linear_dynamic_grouped_conv_add_dispatch(x, projection_weight, base_kernel,
+                                                         finish_delta, residual, workspace, stream);
+ }
+diff --git a/tests/ops/test_candidate_selector.cpp b/tests/ops/test_candidate_selector.cpp
+index 8c72f26..2d24ba8 100644
+--- a/tests/ops/test_candidate_selector.cpp
++++ b/tests/ops/test_candidate_selector.cpp
+@@ -3,6 +3,8 @@
+ #include "ops/op_tester.h"
+ #include "core/decode_graph.h"
+ #include "core/device_buffer.h"
++#include "core/qtype.h"
++#include <cstring>
+ 
+ #include <algorithm>
+ #include <array>
+@@ -24,6 +26,8 @@ namespace {
+ 
+ constexpr std::int32_t kCandidates   = 16;
+ int kSteps                           = 7;
++bool nvfp4_codebooks = false;
++bool sanitizer_mode = false;
+ constexpr std::int32_t kRank         = 256;
+ constexpr std::int32_t kCodebookRows = 248320;
+ constexpr std::int32_t kTokenDomain  = 248077;
+@@ -48,12 +52,32 @@ float represented_pattern(std::uint32_t first, std::uint32_t second, std::uint32
+     return bf16_to_f32(f32_to_bf16(static_cast<float>(centered) * scale));
+ }
+ 
++// Independent scalar interpretation of the stored E2M1 and E4M3 values. Non-power-of-two
++// divisors deliberately expose an unwanted intermediate BF16 cast of a codebook value.
++int fp4_code(int token, int rank, bool predecessor) {
++    return mix32(token * 1777U + rank * 131U + (predecessor ? 101U : 211U)) & 15U;
++}
++int fp4_scale(int token, int group, bool predecessor) {
++    return 48 + (mix32(token * 97U + group * 53U + (predecessor ? 11U : 29U)) % 24);
++}
++float divisor(bool predecessor) { return predecessor ? 13.0F : 7.0F; }
++float nvfp4_value(int token, int rank, bool predecessor) {
++    constexpr float magnitudes[]{0, .5F, 1, 1.5F, 2, 3, 4, 6};
++    const int code = fp4_code(token, rank, predecessor);
++    const int scale = fp4_scale(token, rank / 16, predecessor);
++    const float decoded_scale = std::ldexp(1.0F + (scale & 7) / 8.0F, (scale >> 3) - 7);
++    return ((code & 8) ? -1.0F : 1.0F) * magnitudes[code & 7] * decoded_scale /
++           divisor(predecessor);
++}
++
+ float predecessor_value(std::int32_t token, std::int32_t rank) {
++    if (nvfp4_codebooks) return nvfp4_value(token, rank, true);
+     return represented_pattern(static_cast<std::uint32_t>(token), static_cast<std::uint32_t>(rank),
+                                101U, 1.0F / 256.0F);
+ }
+ 
+ float successor_value(std::int32_t token, std::int32_t rank) {
++    if (nvfp4_codebooks) return nvfp4_value(token, rank, false);
+     return represented_pattern(static_cast<std::uint32_t>(token), static_cast<std::uint32_t>(rank),
+                                211U, 1.0F / 256.0F);
+ }
+@@ -135,6 +159,25 @@ std::vector<std::int32_t> accessed_tokens(const std::vector<std::int32_t>& candi
+ 
+ void populate_codebook(DeviceBuffer& device, std::span<const std::int32_t> tokens,
+                        bool predecessor) {
++    if (nvfp4_codebooks) {
++        constexpr std::size_t scales = std::size_t(kCodebookRows) * kRank / 2;
++        for (int token : tokens) {
++            std::array<std::uint8_t, kRank / 2> row{};
++            for (int rank = 0; rank < kRank; rank += 2)
++                row[rank / 2] = fp4_code(token, rank, predecessor) |
++                                (fp4_code(token, rank + 1, predecessor) << 4);
++            device.copy_from_host(row.data(), row.size(), std::size_t(token) * row.size());
++            for (int group = 0; group < kRank / 16; ++group) {
++                const std::uint8_t scale = fp4_scale(token, group, predecessor);
++                const std::size_t at = scales + ((token / 128) * (kRank / 64) + group / 4) * 512 +
++                    (token % 32) * 16 + ((token % 128) / 32) * 4 + group % 4;
++                device.copy_from_host(&scale, 1, at);
++            }
++        }
++        const float d = divisor(predecessor);
++        device.copy_from_host(&d, sizeof(d), scales + std::size_t(kCodebookRows) * kRank / 16);
++        return;
++    }
+     std::vector<std::uint16_t> row(kRank);
+     for (const std::int32_t token : tokens) {
+         for (std::int32_t rank = 0; rank < kRank; ++rank) {
+@@ -199,6 +242,7 @@ float oracle_uniform(std::uint64_t seed, std::int32_t position) {
+ struct WalkResult {
+     std::vector<std::int32_t> drafts;
+     std::vector<double> probabilities;
++    std::vector<double> confidence;
+     std::array<double, kMaxBatch> minimum_decision_margin;
+ };
+ 
+@@ -209,6 +253,7 @@ WalkResult walk_oracle(const std::vector<std::int32_t>& candidate_ids,
+     WalkResult result;
+     result.drafts.resize(static_cast<std::size_t>(kMaxBatch) * kSteps);
+     result.probabilities.resize(static_cast<std::size_t>(kMaxBatch) * kSteps * kCandidates);
++    result.confidence.resize(std::size_t(kMaxBatch) * kSteps);
+     result.minimum_decision_margin.fill(std::numeric_limits<double>::infinity());
+     for (std::int32_t batch = 0; batch < kMaxBatch; ++batch) {
+         std::int32_t predecessor_rank = 0;
+@@ -266,6 +311,12 @@ WalkResult walk_oracle(const std::vector<std::int32_t>& candidate_ids,
+                         candidate == selected ? 1.0 : 0.0;
+                 }
+             }
++            double maximum = lattice[edge_base];
++            for (int c = 1; c < kCandidates; ++c) maximum = std::max(maximum, lattice[edge_base+c]);
++            double normalizer = 0;
++            for (int c = 0; c < kCandidates; ++c) normalizer += std::exp(lattice[edge_base+c]-maximum);
++            result.confidence[std::size_t(batch) * kSteps + step] =
++                std::exp(lattice[edge_base+selected]-maximum) / normalizer;
+             result.drafts[static_cast<std::size_t>(batch) * kSteps + step] =
+                 candidate_ids[candidate_offset(batch, step, selected)];
+             predecessor_rank = selected;
+@@ -441,13 +492,43 @@ int run(bool ties = false, bool dependent = false) {
+ 
+     Tensor predecessor(predecessor_device.p, DType::BF16, {kRank, kCodebookRows});
+     Tensor successor(successor_device.p, DType::BF16, {kRank, kCodebookRows});
++    const auto as_weight = [](const DeviceBuffer& device, bool pred) {
++        Weight weight{};
++        weight.qdata = device.p;
++        weight.payload = device.p;
++        weight.n = kCodebookRows;
++        weight.k = kRank;
++        weight.qtype = nvfp4_codebooks ? QType::NVFP4 : QType::BF16;
++        weight.layout = nvfp4_codebooks ? QuantLayout::BlockScaleK16M128x4 : QuantLayout::Contiguous;
++        weight.payload_bytes = std::size_t(kRank) * kCodebookRows * 2;
++        if (nvfp4_codebooks) {
++            const std::size_t codes = std::size_t(kRank) * kCodebookRows / 2;
++            weight.payload_bytes = codes + codes / 8 + 4;
++            weight.scales = static_cast<const std::uint8_t*>(device.p) + codes;
++            weight.weight_divisors = static_cast<const std::uint8_t*>(device.p) + codes + codes / 8;
++            weight.weight_divisor_rows = kCodebookRows;
++            weight.weight_scale_divisor = divisor(pred);
++            weight.input_scale_divisor = 1;
++            weight.group = weight.group_size = 16;
++            weight.scale_dtype = DType::FP8_E4M3FN;
++            weight.ndim = 2;
++            weight.shape[0] = weight.padded_shape[0] = kCodebookRows;
++            weight.shape[1] = weight.padded_shape[1] = kRank;
++        }
++        return weight;
++    };
++    const Weight predecessor_weight = as_weight(predecessor_device, true);
++    const Weight successor_weight = as_weight(successor_device, false);
++
+ 
+     int failures = 0;
+     for (int batch_size = 1; batch_size <= kMaxBatch; ++batch_size) {
++        if (sanitizer_mode && batch_size != 1 && batch_size != 8) continue;
+         const std::size_t draft_count = static_cast<std::size_t>(batch_size) * kSteps;
+         const std::size_t q_count     = draft_count * kCandidates;
+         GuardedDeviceBuffer draft_device(draft_count * sizeof(std::int32_t));
+         GuardedDeviceBuffer q_device(q_count * sizeof(float));
++        GuardedDeviceBuffer confidence_device(draft_count * sizeof(float));
+         draft_device.fill(0xff);
+         q_device.fill(0xff);
+         Tensor ids(candidate_device.p, DType::I32, {kCandidates, kSteps, batch_size});
+@@ -461,12 +542,24 @@ int run(bool ties = false, bool dependent = false) {
+             kSteps, kSteps, batch_size, batch_size);
+         GuardedDeviceBuffer scratch(std::max<std::size_t>(capacity, 1));
+         WorkspaceArena workspace(DeviceSpan{scratch.data(), scratch.bytes()});
++        Tensor confidence(confidence_device.data(), DType::FP32, {kSteps, batch_size});
+         const auto launch = [&](cudaStream_t stream) {
+-            ops::candidate_selector_path(ids, unary, hidden, anchor, predecessor, successor,
++            ops::candidate_selector_path(ids, unary, hidden, anchor, predecessor_weight, successor_weight,
+                                          positions,
+                                          static_cast<const ops::SamplingConfig*>(config_device.p),
+-                                         drafts, q, workspace, stream);
++                                         drafts, q, workspace, stream, &confidence);
+         };
++        if (nvfp4_codebooks && batch_size == 1) {
++            Tensor alias(config_device.p, DType::FP32, {kSteps, batch_size});
++            bool rejected = false;
++            try {
++                ops::candidate_selector_path(ids, unary, hidden, anchor, predecessor_weight,
++                    successor_weight, positions,
++                    static_cast<const ops::SamplingConfig*>(config_device.p),
++                    drafts, q, workspace, nullptr, &alias);
++            } catch (const std::invalid_argument&) { rejected = true; }
++            if (!rejected) throw std::runtime_error("selector allowed confidence to overwrite sampling configs");
++        }
+         launch(nullptr);
+         cuda_synchronize();
+ 
+@@ -483,6 +576,11 @@ int run(bool ties = false, bool dependent = false) {
+             std::span<const double>(expected.probabilities.data(), q_count), kProbabilityCriterion);
+         failures += verify_draws(label, batch_size, candidate_ids, configs, base_positions,
+                                  from_device<int>(draft_device.data(), draft_count), actual_q);
++        const auto got_confidence = from_device<float>(confidence_device.data(), draft_count);
++        failures += verify_pointwise(label + " confidence",
++            std::vector<double>(got_confidence.begin(), got_confidence.end()),
++            std::span<const double>(expected.confidence.data(), draft_count), kProbabilityCriterion);
++        failures += confidence_device.verify_guards(label + " confidence");
+         failures += draft_device.verify_guards(label + " drafts");
+         failures += q_device.verify_guards(label + " proposal_q");
+         failures += scratch.verify_guards(label + " workspace");
+@@ -581,7 +679,7 @@ int run(bool ties = false, bool dependent = false) {
+             tp(dp.p, DType::I32, {3});
+         Tensor td(dd.data(), DType::I32, {kSteps, 3}),
+             tq(dq.data(), DType::FP32, {kCandidates, kSteps, 3});
+-        ops::candidate_selector_path(ti, tu, th, ta, predecessor, successor, tp,
++        ops::candidate_selector_path(ti, tu, th, ta, predecessor_weight, successor_weight, tp,
+                                      static_cast<const ops::SamplingConfig*>(dc.p), td, tq,
+                                      workspace, nullptr);
+         cuda_synchronize();
+@@ -610,13 +708,19 @@ int run(bool ties = false, bool dependent = false) {
+ 
+ } // namespace
+ 
+-int main() {
++int main(int argc, char** argv) {
+     try {
+         if (cuda_unavailable()) {
+             std::cout << "SKIP: no usable CUDA device\n";
+             return 77;
+         }
+         int failures = 0;
++        if (argc == 2 && std::string(argv[1]) == "--nvfp4-sanitizer") {
++            nvfp4_codebooks = sanitizer_mode = true;
++            for (int steps : {4, 7}) { kSteps = steps; failures += run(); }
++            std::cout << (failures ? "FAIL" : "OK") << " NVFP4 selector direct/lattice sanitizer cases\n";
++            return failures ? 1 : 0;
++        }
+         for (kSteps = 1; kSteps <= 15; ++kSteps) failures += run();
+         {
+             kSteps = 1;
+@@ -628,6 +732,15 @@ int main() {
+             kSteps = 15;
+             failures += run(false, true);
+         }
++        nvfp4_codebooks = true;
++        for (const int steps : {1, 4, 5, 7, 15}) {
++            kSteps = steps;
++            failures += run();
++        }
++        kSteps = 1;
++        failures += run(true);
++        kSteps = 15;
++        failures += run(false, true);
+         std::cout << (failures == 0 ? "OK" : "FAIL") << " candidate_selector_path\n";
+         return failures == 0 ? 0 : 1;
+     } catch (const std::exception& error) {
+diff --git a/tests/ops/test_dflash2_nvfp4_routes.cpp b/tests/ops/test_dflash2_nvfp4_routes.cpp
+new file mode 100644
+index 0000000..10c5275
+--- /dev/null
++++ b/tests/ops/test_dflash2_nvfp4_routes.cpp
+@@ -0,0 +1,539 @@
++// Oracle tests for the NVFP4 DFlash2 draft routes: the three-output attention input projection,
++// the dynamic grouped conv prepare/finish pair, and the NVFP4 context_kv_materialize kernels.
++// Every oracle evaluates the complete logical formula in FP64 from the represented public
++// inputs, decoding the packed weights through quantized_weight::logical_weight_fp64.
++#include <cuda_runtime.h>
++
++#include "ninfer/ops/attn_input_proj.h"
++#include "ninfer/ops/context_kv_materialize.h"
++#include "ninfer/ops/dynamic_grouped_conv.h"
++
++#include "core/cyclic_kv_cache.h"
++#include "core/decode_graph.h"
++#include "ops/op_tester.h"
++#include "ops/quantized_weight.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdint>
++#include <iostream>
++#include <vector>
++
++using namespace ninfer;
++using namespace ninfer::test;
++using quantized_weight::PackedWeight;
++using quantized_weight::PatternedWeightOptions;
++
++namespace {
++
++constexpr int kHidden = 5120;
++constexpr double kRelative = 2.0e-2;
++
++DeviceBuffer payload_device(const std::vector<std::uint8_t>& payload) {
++    DeviceBuffer buffer(payload.size());
++    buffer.copy_from_host(payload.data(), payload.size());
++    return buffer;
++}
++
++float half_to_f32(std::uint16_t bits) {
++    const std::uint32_t sign = (bits >> 15) & 1U;
++    const std::uint32_t exponent = (bits >> 10) & 0x1fU;
++    const std::uint32_t fraction = bits & 0x3ffU;
++    float value = 0.0F;
++    if (exponent == 0) {
++        value = std::ldexp(static_cast<float>(fraction), -24);
++    } else if (exponent != 31) {
++        value = std::ldexp(static_cast<float>(fraction | 0x400U), static_cast<int>(exponent) - 25);
++    }
++    return sign != 0U ? -value : value;
++}
++
++float pattern_value(std::uint32_t seed, std::int32_t row, std::int32_t column, float scale) {
++    const std::uint32_t mixed = seed * 747796405U + static_cast<std::uint32_t>(row) * 2891336453U +
++                                static_cast<std::uint32_t>(column) * 19349663U;
++    const int centered = static_cast<int>((mixed >> 13U) % 509U) - 254;
++    return bf16_to_f32(f32_to_bf16(static_cast<float>(centered) * scale));
++}
++
++bool sample_ok(double actual, double reference, double tolerance) {
++    return std::fabs(actual - reference) <= std::max(tolerance, std::fabs(reference) * kRelative);
++}
++
++PackedWeight nvfp4_weight(std::int32_t rows, std::int32_t columns, std::uint32_t seed) {
++    PatternedWeightOptions options;
++    options.weight_scale_divisor = 512.0F;
++    options.input_scale_divisor  = 1.0F;
++    return quantized_weight::make_patterned_weight(QType::NVFP4, rows, columns, seed, options);
++}
++
++// ---------------------------------------------------------------------------
++// Three-output attention input projection.
++// ---------------------------------------------------------------------------
++int verify_attn_input() {
++    const PackedWeight packed = nvfp4_weight(6144, kHidden, 501U);
++    DeviceBuffer weight_device = payload_device(packed.payload);
++    const Weight weight = packed.device_weight(weight_device.p);
++    int failures        = 0;
++    for (const std::int32_t tokens : {1, 8, 33}) {
++        std::vector<float> host(static_cast<std::size_t>(kHidden) * tokens);
++        for (std::int32_t column = 0; column < tokens; ++column) {
++            for (std::int32_t row = 0; row < kHidden; ++row) {
++                host[static_cast<std::size_t>(column) * kHidden + row] =
++                    pattern_value(97U, row, column, 1.0F / 256.0F);
++            }
++        }
++        DeviceBuffer x_device = to_device_bf16(host);
++        DeviceBuffer q_device(static_cast<std::size_t>(4096) * tokens * sizeof(std::uint16_t));
++        DeviceBuffer k_device(static_cast<std::size_t>(1024) * tokens * sizeof(std::uint16_t));
++        DeviceBuffer v_device(static_cast<std::size_t>(1024) * tokens * sizeof(std::uint16_t));
++        Tensor x(x_device.p, DType::BF16, {kHidden, tokens});
++        Tensor q(q_device.p, DType::BF16, {4096, tokens});
++        Tensor k(k_device.p, DType::BF16, {1024, tokens});
++        Tensor v(v_device.p, DType::BF16, {1024, tokens});
++        ops::attn_input_proj(x, weight, q, k, v, nullptr);
++        cuda_synchronize();
++        const auto q_got = from_device_bf16(q_device, static_cast<std::size_t>(4096) * tokens);
++        const auto k_got = from_device_bf16(k_device, static_cast<std::size_t>(1024) * tokens);
++        const auto v_got = from_device_bf16(v_device, static_cast<std::size_t>(1024) * tokens);
++        const std::int32_t samples[] = {0, 123, 4095, 4096, 4600, 5120, 6143};
++        for (const std::int32_t column : {0, tokens - 1}) {
++            for (const std::int32_t row : samples) {
++                double reference = 0.0;
++                for (std::int32_t input = 0; input < kHidden; ++input) {
++                    reference += quantized_weight::logical_weight_fp64(packed, row, input) *
++                                 host[static_cast<std::size_t>(column) * kHidden + input];
++                }
++                const float actual = row < 4096   ? q_got[column * 4096 + row]
++                                    : row < 5120 ? k_got[column * 1024 + (row - 4096)]
++                                                 : v_got[column * 1024 + (row - 5120)];
++                if (!sample_ok(actual, reference, 2.0e-2)) {
++                    std::cerr << "attn_input T=" << tokens << " row=" << row
++                              << " column=" << column << ": actual=" << actual << " reference="
++                              << reference << '\n';
++                    ++failures;
++                }
++            }
++        }
++    }
++    return failures;
++}
++
++// ---------------------------------------------------------------------------
++// Dynamic grouped conv prepare + finish.
++// ---------------------------------------------------------------------------
++int verify_dynamic_conv(const PackedWeight& kernel_projection, const PackedWeight& projection,
++                        std::int32_t width, std::int32_t batch, std::uint32_t seed) {
++    constexpr int kCoefficientRows = 1280;
++    const std::size_t columns      = static_cast<std::size_t>(width) * batch;
++    std::vector<float> residual(columns * kHidden);
++    std::vector<float> norm(kHidden);
++    std::vector<float> base(kHidden * 4);
++    for (std::size_t column = 0; column < columns; ++column) {
++        for (std::int32_t row = 0; row < kHidden; ++row) {
++            residual[column * kHidden + row] =
++                pattern_value(seed, row, static_cast<std::int32_t>(column), 1.0F / 128.0F);
++        }
++    }
++    for (std::int32_t row = 0; row < kHidden; ++row) {
++        norm[row] = bf16_to_f32(f32_to_bf16(0.75F + static_cast<float>(row % 17) * (1.0F / 128.0F)));
++        for (int block = 0; block < 4; ++block) {
++            base[static_cast<std::size_t>(block) * kHidden + row] =
++                bf16_to_f32(f32_to_bf16(static_cast<float>((row * 3 + block) % 11) * 0.03125F));
++        }
++    }
++
++    DeviceBuffer weight_device      = payload_device(kernel_projection.payload);
++    DeviceBuffer projection_device  = payload_device(projection.payload);
++    DeviceBuffer residual_device = to_device_bf16(residual);
++    DeviceBuffer norm_device     = to_device_bf16(norm);
++    DeviceBuffer base_device     = to_device_bf16(base);
++    GuardedDeviceBuffer prepared_device(columns * kHidden * sizeof(std::uint16_t));
++    GuardedDeviceBuffer finish_device(columns * 2 * 320 * sizeof(std::uint16_t));
++    const std::size_t prepare_bytes = ops::rmsnorm_dynamic_grouped_conv_prepare_workspace_capacity_bytes(
++        width, width, batch, batch);
++    GuardedDeviceBuffer scratch(std::max<std::size_t>(prepare_bytes, 1));
++    WorkspaceArena workspace(DeviceSpan{scratch.data(), scratch.bytes()});
++    Tensor residual_tensor(residual_device.p, DType::BF16, {kHidden, width, batch});
++    Tensor norm_tensor(norm_device.p, DType::BF16, {kHidden});
++    Tensor base_tensor(base_device.p, DType::BF16, {kHidden, 2, 2});
++    Tensor prepared_tensor(prepared_device.data(), DType::BF16, {kHidden, width, batch});
++    Tensor finish_tensor(finish_device.data(), DType::BF16, {320, 2, width, batch});
++    ops::rmsnorm_dynamic_grouped_conv_prepare(residual_tensor, norm_tensor, 1.0e-6F, base_tensor,
++                                              kernel_projection.device_weight(weight_device.p),
++                                              prepared_tensor, finish_tensor, workspace, nullptr);
++    cuda_synchronize();
++
++    // FP64 oracle: rmsnorm, projected coefficients, in-place conv application, finish delta.
++    std::vector<double> normed(columns * kHidden);
++    for (std::size_t column = 0; column < columns; ++column) {
++        double sum = 0.0;
++        for (std::int32_t row = 0; row < kHidden; ++row) {
++            const double value = residual[column * kHidden + row];
++            sum += value * value;
++        }
++        const double inverse = 1.0 / std::sqrt(sum / kHidden + 1.0e-6);
++        for (std::int32_t row = 0; row < kHidden; ++row) {
++            normed[column * kHidden + row] =
++                residual[column * kHidden + row] * inverse * norm[row];
++        }
++    }
++    std::vector<double> projected(columns * kCoefficientRows);
++    for (std::size_t column = 0; column < columns; ++column) {
++        for (std::int32_t row = 0; row < kCoefficientRows; ++row) {
++            double sum = 0.0;
++            for (std::int32_t input = 0; input < kHidden; ++input) {
++                sum += quantized_weight::logical_weight_fp64(kernel_projection, row, input) *
++                       normed[column * kHidden + input];
++            }
++            projected[column * kCoefficientRows + row] = sum;
++        }
++    }
++    int failures = 0;
++    const auto prepared_got = from_device_bf16(prepared_device.data(), columns * kHidden);
++    const auto finish_got   = from_device_bf16(finish_device.data(), columns * 2 * 320);
++    for (std::size_t column = 0; column < columns; ++column) {
++        const std::int32_t position = static_cast<std::int32_t>(column % width);
++        for (std::int32_t row = 0; row < kHidden; row += 337) {
++            const std::int32_t group = row / 16;
++            double value = (base[row] + projected[column * kCoefficientRows + group]) *
++                           normed[column * kHidden + row];
++            if (position > 0) {
++                value += (base[kHidden + row] +
++                          projected[column * kCoefficientRows + 320 + group]) *
++                         normed[(column - 1) * kHidden + row];
++            }
++            if (!sample_ok(prepared_got[column * kHidden + row], value, 4.0e-2)) {
++                std::cerr << "conv prepare W=" << width << " B=" << batch << " column=" << column
++                          << " row=" << row << ": actual=" << prepared_got[column * kHidden + row]
++                          << " reference=" << value << '\n';
++                ++failures;
++            }
++        }
++        for (const std::int32_t group : {0, 137, 319}) {
++            for (int tap = 0; tap < 2; ++tap) {
++                const double reference =
++                    projected[column * kCoefficientRows + (2 + tap) * 320 + group];
++                const float actual = finish_got[(column * 2 + tap) * 320 + group];
++                if (!sample_ok(actual, reference, 3.0e-3)) {
++                    std::cerr << "conv finish delta W=" << width << " column=" << column
++                              << " tap=" << tap << " group=" << group
++                              << ": actual=" << actual << " reference=" << reference << '\n';
++                    ++failures;
++                }
++            }
++        }
++    }
++    if (failures != 0) { return failures; }
++
++    // Finish: linear_dynamic_grouped_conv_add with the NVFP4 projection parent.
++    const std::int32_t input_rows = static_cast<std::int32_t>(projection.weight.k);
++    std::vector<float> input(columns * input_rows);
++    for (std::size_t column = 0; column < columns; ++column) {
++        for (std::int32_t row = 0; row < input_rows; ++row) {
++            input[column * input_rows + row] =
++                pattern_value(seed + 31U, row, static_cast<std::int32_t>(column), 1.0F / 128.0F);
++        }
++    }
++    DeviceBuffer input_device = to_device_bf16(input);
++    GuardedDeviceBuffer residual_out_device(columns * kHidden * sizeof(std::uint16_t));
++    residual_out_device.fill(0);
++    const std::size_t add_bytes = ops::linear_dynamic_grouped_conv_add_workspace_capacity_bytes(
++        input_rows, width, width, batch, batch);
++    GuardedDeviceBuffer add_scratch(std::max<std::size_t>(add_bytes, 1));
++    WorkspaceArena add_workspace(DeviceSpan{add_scratch.data(), add_scratch.bytes()});
++    Tensor input_tensor(input_device.p, DType::BF16, {input_rows, width, batch});
++    Tensor residual_out_tensor(residual_out_device.data(), DType::BF16, {kHidden, width, batch});
++    ops::linear_dynamic_grouped_conv_add(input_tensor,
++                                         projection.device_weight(projection_device.p),
++                                         base_tensor, finish_tensor, residual_out_tensor,
++                                         add_workspace, nullptr);
++    cuda_synchronize();
++    const auto out_got = from_device_bf16(residual_out_device.data(), columns * kHidden);
++    for (std::size_t column = 0; column < columns; ++column) {
++        const std::int32_t position = static_cast<std::int32_t>(column % width);
++        for (std::int32_t row = 0; row < kHidden; row += 337) {
++            const std::int32_t group = row / 16;
++            double z = 0.0;
++            for (std::int32_t input_row = 0; input_row < input_rows; input_row += 3) {
++                z += quantized_weight::logical_weight_fp64(projection, row, input_row) *
++                     input[column * input_rows + input_row] * 3.0;
++            }
++            // The sampled-dot reconstruction above is exact only for all inputs; use the full dot.
++            z = 0.0;
++            for (std::int32_t input_row = 0; input_row < input_rows; ++input_row) {
++                z += quantized_weight::logical_weight_fp64(projection, row, input_row) *
++                     input[column * input_rows + input_row];
++            }
++            double value = (base[2 * kHidden + row] +
++                            finish_got[(column * 2 + 0) * 320 + group]) *
++                           z;
++            if (position > 0) {
++                double z_previous = 0.0;
++                for (std::int32_t input_row = 0; input_row < input_rows; ++input_row) {
++                    z_previous += quantized_weight::logical_weight_fp64(projection, row, input_row) *
++                                  input[(column - 1) * input_rows + input_row];
++                }
++                value += (base[3 * kHidden + row] + finish_got[(column * 2 + 1) * 320 + group]) *
++                         z_previous;
++            }
++            if (!sample_ok(out_got[column * kHidden + row], value, 8.0e-2)) {
++                std::cerr << "conv add W=" << width << " B=" << batch << " column=" << column
++                          << " row=" << row << ": actual=" << out_got[column * kHidden + row]
++                          << " reference=" << value << '\n';
++                ++failures;
++            }
++        }
++    }
++    return failures;
++}
++
++// ---------------------------------------------------------------------------
++// NVFP4 context_kv_materialize.
++// ---------------------------------------------------------------------------
++constexpr int kCachePadded    = 2056;
++constexpr int kCacheLanes     = 2;
++constexpr double kRopeTheta   = 1.0e7;
++constexpr std::uint16_t kCacheSentinel = 0x5a5aU;
++
++std::size_t cache_elements() {
++    return static_cast<std::size_t>(128) * kCachePadded * 8 * kCacheLanes;
++}
++
++double rope_angle(std::int32_t position, std::int32_t pair) {
++    return static_cast<double>(position) * std::pow(kRopeTheta, -static_cast<double>(pair) / 64.0);
++}
++
++int verify_context_kv(std::int32_t width, std::int32_t batch, std::uint32_t seed, bool graph) {
++    constexpr int kLayers = static_cast<int>(ops::kContextKVMaterializeLayers);
++    const std::size_t columns = static_cast<std::size_t>(width) * batch;
++    std::array<PackedWeight, kLayers> keys;
++    std::array<PackedWeight, kLayers> values;
++    std::array<DeviceBuffer, kLayers> key_device;
++    std::array<DeviceBuffer, kLayers> value_device;
++    std::vector<std::vector<float>> norms(kLayers);
++    std::vector<DeviceBuffer> norm_device(kLayers);
++    for (int layer = 0; layer < kLayers; ++layer) {
++        keys[layer]   = nvfp4_weight(1024, kHidden, 601U + 2U * layer);
++        values[layer] = nvfp4_weight(1024, kHidden, 602U + 2U * layer);
++        key_device[layer]   = payload_device(keys[layer].payload);
++        value_device[layer] = payload_device(values[layer].payload);
++        norms[layer].resize(128);
++        for (int dim = 0; dim < 128; ++dim) {
++            norms[layer][dim] =
++                bf16_to_f32(f32_to_bf16(0.75F + static_cast<float>((dim * 7 + layer) % 19) *
++                                                         (1.0F / 128.0F)));
++        }
++        norm_device[layer] = to_device_bf16(norms[layer]);
++    }
++    std::vector<float> context(columns * kHidden);
++    std::vector<std::int32_t> positions(columns);
++    for (std::size_t column = 0; column < columns; ++column) {
++        for (std::int32_t row = 0; row < kHidden; ++row) {
++            context[column * kHidden + row] =
++                pattern_value(seed, row, static_cast<std::int32_t>(column), 1.0F / 128.0F);
++        }
++        positions[column] = 17 + static_cast<std::int32_t>(column) * 13;
++    }
++    const std::vector<std::int32_t> counts(batch, width);
++    const std::vector<std::int32_t> slots = {0, 1};
++
++    DeviceBuffer context_device = to_device_bf16(context);
++    DeviceBuffer positions_device = to_device_i32(positions);
++    DeviceBuffer counts_device    = to_device_i32(counts);
++    DeviceBuffer slots_device     = to_device_i32(slots);
++    std::vector<GuardedDeviceBuffer> cache_k;
++    std::vector<GuardedDeviceBuffer> cache_v;
++    std::array<ops::ContextKVMaterializeLayerView, kLayers> views;
++    for (int layer = 0; layer < kLayers; ++layer) {
++        cache_k.emplace_back(cache_elements() * sizeof(std::uint16_t));
++        cache_v.emplace_back(cache_elements() * sizeof(std::uint16_t));
++        cache_k[layer].fill(0x5a);
++        cache_v[layer].fill(0x5a);
++        views[layer] = ops::ContextKVMaterializeLayerView{
++            keys[layer].device_weight(key_device[layer].p),
++            values[layer].device_weight(value_device[layer].p),
++            Tensor(norm_device[layer].p, DType::BF16, {128}),
++            CyclicKVCacheLayerView{
++                Tensor(cache_k[layer].data(), DType::BF16, {128, kCachePadded, 8, kCacheLanes}),
++                Tensor(cache_v[layer].data(), DType::BF16, {128, kCachePadded, 8, kCacheLanes}),
++                2048U, static_cast<std::uint32_t>(kCachePadded), 8U, 128U,
++                static_cast<std::uint32_t>(kCacheLanes)},
++        };
++    }
++    const std::size_t capacity = ops::context_kv_materialize_workspace_capacity_bytes(
++        batch, width, width);
++    GuardedDeviceBuffer scratch(std::max<std::size_t>(capacity, 1));
++    WorkspaceArena workspace(DeviceSpan{scratch.data(), scratch.bytes()});
++    Tensor context_tensor(context_device.p, DType::BF16, {kHidden, width, batch});
++    Tensor positions_tensor(positions_device.p, DType::I32, {width, batch});
++    Tensor counts_tensor(counts_device.p, DType::I32, {batch});
++    Tensor slots_tensor(slots_device.p, DType::I32, {batch});
++    if (!graph) {
++        ops::context_kv_materialize(context_tensor, positions_tensor, counts_tensor, slots_tensor,
++                                    views, {0U, static_cast<std::uint32_t>(width)}, workspace,
++                                    nullptr);
++        cuda_synchronize();
++    } else {
++        // Mirror the W8 test's replay contract: capture with the b%3 mixed-count pattern in the
++        // device buffers, then replay through the recorded executable with full counts, fresh
++        // slots, and shifted positions.
++        std::vector<std::int32_t> capture_counts(batch), capture_slots(batch, -1);
++        std::vector<std::int32_t> capture_positions(columns, -1);
++        for (std::int32_t b = 0; b < batch; ++b) {
++            capture_counts[b] = b == batch - 1 || b % 3 == 2
++                                    ? width
++                                    : b % 3 == 1 ? std::max(1, width / 2) : 0;
++            if (capture_counts[b] != 0) {
++                capture_slots[b] = (b * 3 + 2) % 8;
++                for (std::int32_t i = 0; i < capture_counts[b]; ++i) {
++                    capture_positions[static_cast<std::size_t>(b) * width + i] = 2046 + b * 4096 + i;
++                }
++            }
++        }
++        counts_device.copy_from_host(capture_counts.data(), batch * 4);
++        slots_device.copy_from_host(capture_slots.data(), batch * 4);
++        positions_device.copy_from_host(capture_positions.data(), columns * 4);
++        for (auto& buffer : cache_k) { buffer.fill(0x5a); }
++        for (auto& buffer : cache_v) { buffer.fill(0x5a); }
++        cudaStream_t stream = nullptr;
++        cuda_check(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking),
++                   "context graph stream");
++        DecodeGraphDefinition definition;
++        DecodeGraphExecutable executable;
++        cudaStream_t capture_stream = stream;
++        definition.capture(capture_stream, [&] {
++            ops::context_kv_materialize(context_tensor, positions_tensor, counts_tensor,
++                                        slots_tensor, views,
++                                        {0U, static_cast<std::uint32_t>(width)}, workspace,
++                                        capture_stream);
++        });
++        executable.instantiate(definition);
++        counts_device.copy_from_host(counts.data(), batch * 4);
++        slots_device.copy_from_host(slots.data(), batch * 4);
++        positions_device.copy_from_host(positions.data(), columns * 4);
++        for (auto& buffer : cache_k) { buffer.fill(0x5a); }
++        for (auto& buffer : cache_v) { buffer.fill(0x5a); }
++        cuda_synchronize();
++        executable.launch(stream);
++        cuda_synchronize(stream);
++        cuda_check(cudaStreamDestroy(stream), "destroy context graph stream");
++    }
++
++    int failures = 0;
++
++    for (int layer = 0; layer < kLayers; ++layer) {
++        const auto k_got = from_device_bf16(cache_k[layer].data(), cache_elements());
++        const auto v_raw = from_device<std::uint16_t>(cache_v[layer].data(), cache_elements());
++        std::vector<float> v_got(cache_elements());
++        for (std::size_t index = 0; index < cache_elements(); ++index) {
++            v_got[index] = bf16_to_f32(v_raw[index]);
++        }
++        // Full FP64 oracle for sampled (column, head, dim) cells.
++        for (std::size_t column = 0; column < columns; column += std::max<std::size_t>(1, columns / 3)) {
++            const std::int32_t position = positions[column];
++            const std::size_t slot      = static_cast<std::size_t>(slots[column / width]);
++            for (const std::int32_t head : {0, 3, 7}) {
++                std::vector<double> key_raw(128), key_normed(128);
++                for (int dim = 0; dim < 128; ++dim) {
++                    const std::int32_t row = head * 128 + dim;
++                    double sum             = 0.0;
++                    for (std::int32_t input = 0; input < kHidden; ++input) {
++                        sum += quantized_weight::logical_weight_fp64(
++                                   keys[layer], row, input) *
++                               context[column * kHidden + input];
++                    }
++                    key_raw[dim] = sum;
++                }
++                double square = 0.0;
++                for (int dim = 0; dim < 128; ++dim) { square += key_raw[dim] * key_raw[dim]; }
++                const double inverse = 1.0 / std::sqrt(square / 128.0 + 1.0e-6);
++                for (int dim = 0; dim < 128; ++dim) {
++                    key_normed[dim] = key_raw[dim] * inverse * norms[layer][dim];
++                }
++                for (const std::int32_t pair : {0, 1, 31}) {
++                    const double a_x = rope_angle(position, pair);
++                    const double a_y = rope_angle(position, pair + 1);
++                    const double kx =
++                        key_normed[pair] * std::cos(a_x) - key_normed[pair + 64] * std::sin(a_x);
++                    const double ky =
++                        key_normed[pair + 64] * std::cos(a_x) + key_normed[pair] * std::sin(a_x);
++                    const double kx1 = key_normed[pair + 1] * std::cos(a_y) -
++                                       key_normed[pair + 65] * std::sin(a_y);
++                    const double ky1 = key_normed[pair + 65] * std::cos(a_y) +
++                                       key_normed[pair + 1] * std::sin(a_y);
++                    const std::int64_t base =
++                        (position & 2047) +
++                        static_cast<std::int64_t>(kCachePadded) * (head + 8 * slot);
++                    if (!sample_ok(k_got[base * 128 + pair], kx, 4.0e-2) ||
++                        !sample_ok(k_got[base * 128 + pair + 64], ky, 4.0e-2) ||
++                        !sample_ok(k_got[base * 128 + pair + 1], kx1, 4.0e-2) ||
++                        !sample_ok(k_got[base * 128 + pair + 65], ky1, 4.0e-2)) {
++                        std::cerr << "context K layer=" << layer << " column=" << column
++                                  << " head=" << head << " pair=" << pair << ": actual k="
++                                  << k_got[base * 128 + pair] << " reference=" << kx << '\n';
++                        ++failures;
++                    }
++                }
++                for (const std::int32_t dim : {0, 64, 127}) {
++                    const std::int32_t row = head * 128 + dim;
++                    double value           = 0.0;
++                    for (std::int32_t input = 0; input < kHidden; ++input) {
++                        value += quantized_weight::logical_weight_fp64(values[layer], row, input) *
++                                 context[column * kHidden + input];
++                    }
++                    const std::int64_t base =
++                        (position & 2047) +
++                        static_cast<std::int64_t>(kCachePadded) * (head + 8 * slot);
++                    if (!sample_ok(v_got[base * 128 + dim], value, 4.0e-2)) {
++                        std::cerr << "context V layer=" << layer << " column=" << column
++                                  << " head=" << head << " dim=" << dim
++                                  << ": actual=" << v_got[base * 128 + dim]
++                                  << " reference=" << value << '\n';
++                        ++failures;
++                    }
++                }
++            }
++        }
++    }
++    return failures;
++}
++
++} // namespace
++
++int main() {
++    int device_count = 0;
++    if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) {
++        std::cout << "SKIP: no usable CUDA device\n";
++        return 77;
++    }
++    try {
++    int failures = 0;
++    std::cerr << "section: attn_input\n";
++    failures += verify_attn_input();
++    std::cerr << "section: conv\n";
++    const PackedWeight conv_projection_kernel = nvfp4_weight(1280, kHidden, 521U);
++    const PackedWeight attention_output       = nvfp4_weight(kHidden, 4096, 523U);
++    const PackedWeight mlp_down               = nvfp4_weight(kHidden, 17408, 525U);
++    std::cerr << "section: conv 2x1\n";
++    failures += verify_dynamic_conv(conv_projection_kernel, attention_output, 2, 1, 701U);
++    std::cerr << "section: conv 8x2\n";
++    failures += verify_dynamic_conv(conv_projection_kernel, attention_output, 8, 2, 703U);
++    std::cerr << "section: conv 4x3\n";
++    failures += verify_dynamic_conv(conv_projection_kernel, mlp_down, 4, 3, 705U);
++    std::cerr << "section: context\n";
++    failures += verify_context_kv(1, 1, 801U, false);
++    failures += verify_context_kv(16, 1, 803U, false);
++    failures += verify_context_kv(3, 2, 805U, false);
++    std::cerr << "section: context graph\n";
++    failures += verify_context_kv(1, 1, 801U, true);
++    failures += verify_context_kv(8, 1, 807U, true);
++    failures += verify_context_kv(16, 1, 803U, true);
++    failures += verify_context_kv(3, 2, 805U, true);
++    failures += verify_context_kv(9, 2, 809U, true);
++    std::cout << (failures == 0 ? "OK" : "FAIL") << " dflash2 nvfp4 routes\n";
++    return failures == 0 ? 0 : 1;
++    } catch (const std::exception& error) {
++        std::cerr << "dflash2 nvfp4 routes: " << error.what() << '\n';
++        return 1;
++    }
++}
+diff --git a/tests/ops/tests.cmake b/tests/ops/tests.cmake
+index dc6f10c..7c25009 100644
+--- a/tests/ops/tests.cmake
++++ b/tests/ops/tests.cmake
+@@ -64,6 +64,10 @@ ninfer_add_op_test(ninfer_candidate_selector_test
+   SOURCES "${CMAKE_CURRENT_LIST_DIR}/test_candidate_selector.cpp"
+   LIBRARIES ninfer_ops)
+ 
++ninfer_add_op_test(ninfer_candidate_selector_nvfp4_test STANDALONE
++  SOURCES "${CMAKE_CURRENT_LIST_DIR}/test_candidate_selector.cpp"
++  LIBRARIES ninfer_ops)
++
+ ninfer_add_op_test(ninfer_dflash2_ops_test
+   SOURCES "${CMAKE_CURRENT_LIST_DIR}/test_dflash2_ops.cpp"
+   LIBRARIES ninfer_ops)
+@@ -427,3 +431,8 @@ ninfer_add_test(ninfer_stream_cpu_test
+   LIBRARIES ninfer_ops)
+ target_include_directories(ninfer_gguf_expert_cpu_test PRIVATE
+   "${PROJECT_SOURCE_DIR}/third_party/ggml-quants/src")
++
++# Native NVFP4 draft inputs, checked against independent represented-value oracles.
++ninfer_add_op_test(ninfer_dflash2_nvfp4_routes_test STANDALONE
++  SOURCES "${CMAKE_CURRENT_LIST_DIR}/test_dflash2_nvfp4_routes.cpp"
++  LIBRARIES ninfer_ops)

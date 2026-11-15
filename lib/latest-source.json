@@ -1,0 +1,21 @@
+{
+  "source": "https://github.com/iamwavecut/ninfer-all",
+  "revision": "40d913db2e87e2211fce4089c0c7920480a5e7a0",
+  "sourceTree": "4167d8025061958a87f91ede161644a7d962c3dc",
+  "patch": "patches/ninfer-latest-nvfp4-dflash2.patch",
+  "patchSha256": "2533f92d4cbe0def4aaa09f6162f5ef14ce2bdd836263a17f12684683e96f8d3",
+  "capabilities": {
+    "dflash2Nvfp4": true,
+    "kvStorage": [],
+    "qualification": "Focused FP64-oracle, graph, racecheck and synccheck validation on Linux SM120; sustained range workload tuning pending"
+  },
+  "unsupportedLegacyFeatures": [
+    "q5_1",
+    "q6_0",
+    "--output-head-residency"
+  ],
+  "scope": "Optional latest-source build; packaged legacy KV runtime remains separately pinned",
+  "customRuntimeArchitectures": [
+    "120a"
+  ]
+}
