@@ -16,17 +16,14 @@ import urllib.error
 import sys
 import time
 
-REVISION = '3d882fc116941d9233c40bf30f4d66dbaa3d24bd'
-BASE = 'https://github.com/iamwavecut/ninfer-all/releases/download/2026-10-26.2/'
-PACKAGES = {
-    '13': ('ninfer-linux-x64-cuda13.4-sm75-80-86-89-120a-3d882fc11694', [
-        (1992294400, '12475aa3e7ee2e3fefaa63845ed3392ca0771e312e83081d3e79bd376f40a1d9'),
-        (1930978986, 'ccbcdf2caa179797769c4b0d987b0b0e48fe6d5aadde6ff264f6975271f08817')]),
-    '12': ('ninfer-linux-x64-cuda12.9-sm70-75-80-86-89-3d882fc11694', [
-        (1992294400, '13e3b61ddcb0b8d860c55894afdebf528cadea7c22fbd67ffd84c9e43eb2f25f'),
-        (1992294400, '533fc4fcb51eed5928529202b01dce843a391fcff7c8ca02b6d249b58f931931'),
-        (58130579, '474d629b9deceddeeae82709c000e206b796425aacfe3693e3887997b309de4f')]),
-}
+REVISION = '40d913db2e87e2211fce4089c0c7920480a5e7a0'
+BASE = 'https://github.com/iamwavecut/ninfer-all/releases/download/2026-11-13.2/'
+PACKAGES = {'13': ('ninfer-linux-x64-cuda13.4-sm75-80-86-89-120a-40d913db2e87',
+        [(1992294400, '332eb059c5f931c6654f4378be7f5acee0558936652cc2759f856186eb21b7de'),
+         (1014654557, 'a39b1ad276baa95057e021c518807d3b303e1ca6ce3e922a688348d2c0778a19')]),
+ '12': ('ninfer-linux-x64-cuda12.9-sm70-75-80-86-89-40d913db2e87',
+        [(1992294400, '71bcc1142bdfa2e8feb3ddcb5bae49237cd744402b5c2d6ae82f0bb642476d9e'),
+         (1053022988, 'dbfda70ae4aa080e280a97107f18669ec5584c0ba1d600e414844daea3078070')])}
 
 
 def sha256(path):
