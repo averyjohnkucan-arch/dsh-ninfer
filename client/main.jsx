@@ -1,0 +1,99 @@
+import { EngineHeader } from "./EngineHeader.jsx";
+import React from "react";
+
+  const h = React.createElement;
+  const { useEffect, useState } = React;
+  const css = `.ninfer-card{margin-top:16px;padding:18px;border:1px solid var(--dsw-alias-settings-card-stroke);border-radius:12px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-settings-card-fill);font:inherit}.ninfer-card *{box-sizing:border-box}.ninfer-head,.ninfer-actions,.ninfer-row,.ninfer-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.ninfer-head,.ninfer-row{justify-content:space-between}.ninfer-card button,.ninfer-card input,.ninfer-card select{font:inherit;color:inherit;background:var(--dsw-alias-button-secondary-fill);border:1px solid var(--dsw-alias-border-l3);border-radius:7px;padding:8px}.ninfer-card button{cursor:pointer}.ninfer-card button:disabled{opacity:.5;cursor:default}.ninfer-card p,.ninfer-card small{color:var(--dsw-alias-label-secondary);line-height:1.5}.ninfer-card h3,.ninfer-card h4{margin:0}.ninfer-row{padding:15px 0;border-top:1px solid var(--dsw-alias-border-l3)}.ninfer-tabs{padding:14px 0}.ninfer-tabs button[aria-current=page]{font-weight:bold}.ninfer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.ninfer-grid label{display:grid;gap:5px}.ninfer-path{overflow-wrap:anywhere}.ninfer-error{color:#ed7474!important}.ninfer-files{max-height:230px;overflow:auto;display:grid;gap:4px}.ninfer-files button{text-align:left}.ninfer-card pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}`;
+  async function api(action,payload={}) {
+   const response=await fetch('/api/dsh-ninfer',{credentials:'same-origin',method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,payload})});
+   if(response.status===401||response.status===403)throw Error('Reopen DSH using its launch link, then reload this page.');
+   const result=await response.json();if(!response.ok||result.error)throw Error(result.error||response.statusText);return result.result;
+  }
+  function downloadConfig(config){
+   const url=URL.createObjectURL(new Blob([JSON.stringify(config,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download=config.name.replace(/[^a-zA-Z0-9._-]/g,'_')+'.dsh-model.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function ConfigImport({busy,run,done}){
+   const [config,setConfig]=useState(null),[path,setPath]=useState(''),[error,setError]=useState('');
+   return h('section',{'aria-label':'Import model config'},h('h4',null,'Import model config'),h('p',null,'Select an exported JSON config and a folder containing the model files. Subfolders are searched by exact size, then MD5; filenames may differ.'),h('label',null,'Model config JSON',h('input',{type:'file',accept:'.json,application/json',disabled:busy,onChange:async event=>{setError('');setConfig(null);try{const file=event.target.files[0];if(!file)return;if(file.size>2*1024*1024)throw Error('Model config exceeds 2 MiB');setConfig(JSON.parse(await file.text()));}catch(error){setError(error.message);}}})),config&&h('p',null,config.name+' · '+(config.files?.length||0)+' files to locate'),h('label',null,'Search folder',h('input',{value:path,placeholder:'/path/to/models',onChange:event=>setPath(event.target.value)})),error&&h('p',{role:'alert',className:'ninfer-error'},error),h('button',{type:'button',disabled:busy||!config||!path,onClick:async()=>{try{await run('import-config',{config,path});done();}catch(error){setError(error.message);}}},'Find files and import'));
+  }
+  function Card() {
+   const [data,setData]=useState(null),[view,setView]=useState('models'),[draft,setDraft]=useState(null),[listing,setListing]=useState(null),[path,setPath]=useState(''),[scan,setScan]=useState(null),[catalog,setCatalog]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+   const refresh=async()=>setData(await api('list'));
+   useEffect(()=>{let live=true;const update=()=>api('list').then(x=>{if(live)setData(x);}).catch(e=>{if(live)setError(e.message);});update();const timer=setInterval(update,2000);return()=>{live=false;clearInterval(timer);};},[]);
+   useEffect(()=>{if(view!=='download')return;let live=true;const update=()=>api('recommended').then(x=>{if(live)setCatalog(x);}).catch(e=>{if(live)setError(e.message);});update();const timer=setInterval(update,2000);return()=>{live=false;clearInterval(timer);};},[view]);
+   const act=async(action,payload={})=>{setBusy(true);setError('');try{const result=await api(action,payload);await refresh();return result;}catch(e){setError(e.message);throw e;}finally{setBusy(false);}};
+   const run=(action,payload)=>act(action,payload).catch(()=>{});
+   const edit=(key,value)=>setDraft(p=>{
+    const next={...p,[key]:value};
+    if(key==='context'){
+     const capacity=Number(p.options['--kv-capacity']);
+     // Explicit capacity follows the context it sized; preserve auto and larger custom pools.
+     if(capacity>0&&(capacity===p.context||capacity<value)){
+      next.options={...p.options,'--kv-capacity':value};
+      next.locks=[...new Set([...p.locks,'options.--kv-capacity'])];
+     }
+    }
+    return next;
+   });
+   const option=(key,value)=>setDraft(p=>({...p,options:{...p.options,[key]:value}}));
+   const active=data?.jobs.find(j=>j.status==='running'), latest=data?.jobs.at(-1);
+   const installation=data?.jobs.filter(j=>j.kind==='Install NInfer').at(-1);
+   const modelBusy=active && active.kind!=='Install NInfer';
+   async function browse(folder) {try{const next=await act('browse',{path:folder||undefined});setListing(next);setPath(next.path);}catch{}}
+   async function scanFolder() {try{setScan(await act('scan',{path:listing.path}));}catch{}}
+   async function choose(model) {
+    if(!model.complete){setError('This model is missing one or more files.');return;}
+    try{
+     const result=await act('assign',{paths:[model.path]});
+     if(!result.complete)throw Error(result.warnings.join(' '));
+     const profile=await act('new');const values={...result.assignments};const name=values.suggestedName||model.name;delete values.suggestedName;
+     const options={...profile.options};if(model.components.includes('vision'))options['--vision']=true;
+     // NInfer requires a draft width with --spec mtp; 3 is its own automatic default.
+     if(model.components.includes('mtp')){options['--spec']='mtp';options['--draft-tokens']=3;}
+     setDraft({...profile,...values,name,nativeContext:model.nativeContext||null,components:model.components,kvCache:model.modelType==='qwen3_5_text',options});setView('editor');
+    }catch(e){setError(e.message);}
+   }
+   async function save(calibrate=false){try{await act('save',{profile:draft});const id=draft.id;setDraft(null);setView('models');if(calibrate)await act('calibrate',{id});}catch{}}
+   async function benchmark(){try{const existing=data.profiles.find(p=>p.id===draft.id);const clean=({status,external,activeRequests,cacheStatus,log,speedTest,...profile})=>profile;const changed=!existing||JSON.stringify(clean(draft))!==JSON.stringify(clean(existing));const saved=changed?await act('save',{profile:draft}):existing;setDraft(saved);await act('benchmark',{id:saved.id});}catch{}}
+   async function editProfile(p){
+    setDraft(structuredClone(p));setView('editor');
+    if(!p.modelPath||p.components)return;
+    try{const result=await api('assign',{paths:[p.modelPath]});const item=result.files.find(f=>f.kind==='ninfer');if(item)setDraft(current=>current?.id===p.id?{...current,nativeContext:item.nativeContext||null,components:item.components}:current);}catch(e){setError(e.message);}
+   }
+   const button=(label,fn,disabled=false,props={})=>h('button',{type:'button',onClick:fn,disabled,...props},label);
+   const savedDraft=data?.profiles.find(p=>p.id===draft?.id);
+   const speedCurrent=draft&&savedDraft&&['modelPath','modelFiles','context','gpu','executable','options','environment','extraArgs','powerProfile','kvCache','tuned','locks'].every(key=>JSON.stringify(draft[key])===JSON.stringify(savedDraft[key]));
+   const speed=speedCurrent?savedDraft.speedTest:null;
+   const speedRunning=active?.kind==='Test speed'&&active.profileId===draft?.id;
+   const speedLabel=speedRunning?'Testing…':speed?`p${Math.round(speed.prefillTokS)}/d${Math.round(speed.decodeTokS)}`:'Test speed';
+   return h('section',{className:'ninfer-card dsh-engine-panel','aria-label':'NInfer'},h('style',null,css),
+    h(EngineHeader,{name:'NInfer',status:(installation?.status==='running'?'Installing runtime…':data?.runtimeKind==='custom'?'Custom engine':data?.runtimeKind==='official'?'Official engine':'Local models')+(data?.sharedScheduler?' · Shared GPU scheduler':' · Independent GPU queue')},button('Purge all cache',()=>run('purge-cache'),busy||!!active)),
+    error&&h('p',{role:'alert',className:'ninfer-error'},error),
+    installation?.status==='failed'&&h('div',{role:'alert'},h('p',{className:'ninfer-error'},'NInfer runtime installation failed. Retry resumes valid downloads and replaces damaged parts.'),button('Retry installation',()=>run('install-engine'),busy),button('View installation log',()=>setView('activity'))),
+    !data?h('p',null,'Connecting to NInfer…'):null,
+    data&&view!=='editor'&&h('nav',{className:'ninfer-tabs','aria-label':'NInfer views'},...['models','files','download','activity'].map(id=>h('button',{key:id,type:'button','aria-current':view===id?'page':undefined,onClick:()=>setView(id)},id[0].toUpperCase()+id.slice(1))),button('Import files',async()=>{setView('files');await browse();},busy),button('Import config',()=>setView('config'),busy)),
+    data&&view==='config'&&h(ConfigImport,{busy:busy||!!modelBusy,run:act,done:()=>setView('models')}),
+    data&&view==='models'&&h('div',null,
+     !data.profiles.length&&h('p',null,'Import a NInfer model to get started.'),
+     ...data.profiles.map(p=>h('div',{className:'ninfer-row',key:p.id},h('div',null,h('strong',null,p.name),h('p',null,`${p.status} · ${p.context.toLocaleString()} context`),p.runtimeNotice&&h('p',{className:'ninfer-error'},p.runtimeNotice),p.cacheStatus?.phase==='warning'&&h('small',null,p.cacheStatus.message)),h('div',{className:'ninfer-actions'},button('Settings',()=>editProfile(p),busy||!!active),button(p.status==='running'?'Unload':'Load',()=>run(p.status==='running'?'stop':'prepareStart',{id:p.id}),busy||!!active),button('Export config',()=>run('export-config',{id:p.id}),busy||!!modelBusy),button('Remove',()=>{if(window.confirm('Remove this profile? Model files will be kept.'))run('remove',{id:p.id});},busy||!!active)))),
+     h('p',null,'NInfer calibrates GPU kernels automatically when needed.')),
+    data&&view==='files'&&h('div',null,
+     h('p',null,'Choose a folder to scan its subfolders for NInfer models. Model files stay where they are.'),
+     h('div',{className:'ninfer-actions'},h('input',{'aria-label':'Folder path',value:path,onChange:e=>setPath(e.target.value),onKeyDown:e=>{if(e.key==='Enter')browse(path);}}),button('Open folder',()=>browse(path),busy),listing&&button('Scan this folder',scanFolder,busy)),
+     listing&&h('div',{className:'ninfer-files'},button('↑ Parent folder',()=>browse(listing.parent),busy),...listing.entries.filter(e=>e.directory).map(e=>h('button',{key:e.path,type:'button',onClick:()=>browse(e.path)},e.name+'/'))),
+     scan&&h('div',null,h('h4',null,`Models found (${scan.models.length})`),...scan.models.map(model=>h('div',{className:'ninfer-row',key:model.path},h('div',null,h('strong',null,model.name),h('p',{className:'ninfer-path'},model.path),h('small',null,model.complete?`${model.nativeContext||'Unknown'} native context · ${model.components.join(', ')}`:'Missing files: '+model.missing.join(', '))),button(model.complete?'Add model':'Missing files',()=>choose(model),busy||!model.complete))),scan.errorCount>0&&h('p',null,`${scan.errorCount} files or folders could not be inspected.`))),
+    data&&view==='download'&&h('div',null,h('p',null,'Download a listed model or import files you already have.'),...((catalog?.models||[]).map(model=>{const job=catalog.jobs.filter(j=>j.modelId===model.id).at(-1),downloadable=model.files.length&&model.files.every(file=>file.downloadable);return h('div',{className:'ninfer-row',key:model.id},h('div',null,h('strong',null,model.name),job&&h('p',null,`${job.status} · ${job.progress}`)),downloadable&&button('Download',()=>run('recommendedDownload',{id:model.id}),busy||job?.status==='running'),job?.status==='complete'&&button('Open downloaded files',async()=>{setView('files');await browse(job.directory);},busy));}))),
+    data&&view==='editor'&&draft&&h('div',null,button('← Models',()=>{setDraft(null);setView('models');}),h('h4',null,draft.name),h('p',{className:'ninfer-path'},draft.modelPath),
+     h('div',{className:'ninfer-grid'},h('label',null,'Model name',h('input',{value:draft.name,onChange:e=>edit('name',e.target.value)})),h('label',null,'Context',h('select',{value:draft.context,onChange:e=>edit('context',Number(e.target.value))},...Array.from(new Set([draft.context,draft.nativeContext,...Array.from({length:Math.ceil((draft.nativeContext||Math.max(draft.context,262144))/32768)},(_,i)=>(i+1)*32768)].filter(x=>x>0&&x<=Math.max(draft.context,draft.nativeContext||262144)))).sort((a,b)=>a-b).map(n=>h('option',{key:n,value:n},n===draft.nativeContext?`Native (${n.toLocaleString()})`:n.toLocaleString())))),
+     h('label',null,'KV precision',h('select',{value:draft.options['--kv-dtype']||'',onChange:e=>option('--kv-dtype',e.target.value)},...Array.from(new Set(['','bf16','int8','fp8','rk8v4','rk4v4','rk4v4-e8','rk2v4-e8','nvfp4','k8v4',...(data.customRuntime?['q5_1','q6_0']:[]),draft.options['--kv-dtype']||''])).map(x=>h('option',{key:x,value:x},x||'Engine default'))))),
+     !draft.nativeContext&&h('p',null,'Native context was not found; the engine default is selected.'),h('p',null,draft.components?.includes('vision')?'Vision is built into this artifact.':'No built-in vision component detected.'),h('p',null,draft.components?.includes('mtp')?(draft.options['--spec']==='mtp'?'Built-in MTP enabled (NInfer default draft width).':'Built-in MTP is available.'):'No built-in MTP detected.'),
+     h('details',null,h('summary',null,'Advanced'),h('div',{className:'ninfer-grid'},h('label',null,'Port',h('input',{type:'number',value:draft.port,onChange:e=>edit('port',Number(e.target.value))})),h('label',null,'GPU index',h('input',{type:'number',value:draft.gpu,onChange:e=>edit('gpu',Number(e.target.value))}))),h('label',null,h('input',{type:'checkbox',checked:draft.kvCache===true,onChange:e=>edit('kvCache',e.target.checked)}),' Save conversation checkpoints (16 GiB per model)'),h('p',null,'DFlash and DFlash2 cannot save checkpoints in the official NInfer runtime; unsupported saves show a warning.'),draft.runtimeNotice&&h('p',{role:'alert',className:'ninfer-error'},draft.runtimeNotice),h('label',null,'Engine executable',h('input',{value:draft.executable||'',placeholder:'Automatically installed runtime',onChange:e=>edit('executable',e.target.value)}))),
+     h('div',{className:'ninfer-actions'},button('Cancel',()=>{setDraft(null);setView('models');}),button('Save',()=>save(),busy||!!modelBusy),button('Save and calibrate',()=>save(true),busy||!!active),button(speedLabel,benchmark,busy||!!active,{title:'Test speed: 2,048 uncached input tokens and 512 generated tokens. p = prefill tok/s; d = decode tok/s. Short raw-text benchmark; not full-context chat speed.'})),h('small',null,'Calibrate runs NInfer’s GPU kernel calibration; resource settings remain automatic.')),
+    data&&view==='activity'&&h('div',null,...data.jobs.slice(-8).reverse().map(job=>h('div',{key:job.id,className:'ninfer-row'},h('div',null,h('strong',null,job.kind),h('p',{role:job.status==='failed'?'alert':'status'},job.progress),job.kind==='Export config'&&job.status==='complete'&&button('Download config JSON',()=>downloadConfig(job.result)),job.log&&h('details',null,h('summary',null,'View log'),h('pre',null,job.log))),job.status==='running'&&button('Cancel',()=>run('cancel',{id:job.id})),['failed','cancelled'].includes(job.status)&&job.kind==='Install NInfer'&&button('Retry installation',()=>run('install-engine'))))),
+    data&&view!=='activity'&&latest?.kind==='Export config'&&latest.status==='complete'&&button('Download config JSON',()=>downloadConfig(latest.result)),
+    data&&view!=='activity'&&(active||latest?.status==='failed')&&h('div',{role:'status'},h('p',null,(active||latest).kind+': '+(active||latest).progress),h('button',{type:'button',onClick:()=>setView('activity')},'Activity'),!active&&latest?.kind==='Install NInfer'&&button('Retry installation',()=>run('install-engine'),busy))
+   );
+  }
+  const plugin = {inject:['slots'],apply(ctx){ctx.slots.inject('settings.models.footer',()=>ctx.slots.register({name:'settings.models.footer',id:'dsh-ninfer',order:20},Card));}};
+ 
+export const { inject, apply } = plugin;

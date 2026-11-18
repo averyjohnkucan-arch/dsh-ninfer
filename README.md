@@ -1,10 +1,12 @@
 # NInfer for DeepSeek Harness
 
+**RC4 installation trial.** Start DeepSeek Harness with `npx @deepseek-ai/dsh@0.2.2-rc.4 web` (Node.js 24.9 or newer). In **Plugins → Add plugin**, paste the full path to this RC4 trial’s `.tgz` file and enable the plugin.
+
 A local NInfer model provider for DeepSeek Harness. Import a folder to find `.ninfer` models, inspect their components and missing parts, and choose a model. The model's native context is selected when its manifest declares it. Vision and MTP are enabled when present. NInfer requires an explicit draft width for MTP, so the plugin uses the upstream automatic default of three drafts.
 
 ## Install
 
-Requires DSH 0.2.1-rc.2, Node 22.19+, Python 3.12+, Linux x86-64 and a compatible NVIDIA driver. In **Plugins → Add plugin**, paste `https://github.com/averyjohnkucan-arch/dsh-ninfer` and enable it.
+Requires DSH 0.2.2-rc.4, Node 24.9+, Python 3.12+, Linux x86-64 and a compatible NVIDIA driver. In **Plugins → Add plugin**, paste `https://github.com/averyjohnkucan-arch/dsh-ninfer` and enable it.
 
 On consumer Blackwell GPUs (SM120), first activation downloads the **custom engine from this repository's GitHub release**, verifies every archive part and runtime file with SHA-256, and selects it automatically. The package contains the matching server and calibration tool, CUDA and multimedia libraries, and a matching private glibc loader. No compiler, CUDA toolkit, old model folders or Desktop launcher is needed. The host supplies the NVIDIA driver. The runtime download is approximately 1.5 GiB; model weights are separate.
 
