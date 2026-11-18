@@ -1,0 +1,18 @@
+{
+  "status": "verified",
+  "selectedProfiles": 6,
+  "oneConfigurationAtBothDepths": true,
+  "profileIds": [
+    "scratch-tuned1090-measured-27b-ninfer1616",
+    "scratch-tuned1090-measured-huihui-int8",
+    "scratch-tuned1090-range-flash-basalt-long",
+    "scratch-tuned1090-range-hybrid-basalt-long",
+    "scratch-tuned1090-measured-gyro-strata",
+    "scratch-tuned1090-deepseek-iq2-xxs"
+  ],
+  "files": {
+    "ninfer-profiles.json": "0da6ea3187851bdfe685d6dcf48cad91e1f64685f4a22938f736f4017e531f73",
+    "strata-profiles.json": "947ec298ff71536a03bbb053666db05f520776d479fcffd3796a6046ab2c8085",
+    "basalt-profiles.json": "79833c4cc51b1fe7f13d21ded65f90ca74341283845cc136d223f5f3b8ce519b"
+  }
+}

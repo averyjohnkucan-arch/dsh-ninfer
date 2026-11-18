@@ -59,3 +59,7 @@ Install [dsh-model-scheduler](https://github.com/averyjohnkucan-arch/dsh-model-s
 Local inference and independent base prefill allow 24 hours without output by default (`requestIdleTimeoutMs: 86400000` in the `dsh-ninfer` Cordis config). Long context prefill can be silent; the former 15-minute limit could repeatedly fail translation workers. The interval is configurable from 1 to 2147483647 milliseconds. A stalled admitted request still fails after that interval; this is not an unlimited wait.
 
 GPU admission and the serial checkpoint queue wait outside the inference idle watchdog. Stop cancels queued requests promptly without allowing later requests to bypass the active owner. These changes do not resume existing sessions.
+
+## Local tuning profile controls
+
+Saved `samplingPresets.instruct` and `samplingPresets.thinking` supply defaults for the matching reasoning mode without adding prompt text. Explicit request sampling values take precedence. Profiles without these fields keep their native defaults. Local `cpuSet` settings preserve measured Linux CPU affinity for the server process tree. The accompanying10%/90% benchmark profiles are separate local exports; these changes do not claim a universal throughput maximum.
